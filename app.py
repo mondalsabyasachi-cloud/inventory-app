@@ -1,8 +1,8 @@
 
-# ------------------------------------------------------------
+# -------------------------------------------------------------
 # Packsmart Inventory App (RM / WIP / FG) - Streamlit (single file)
 # Prepared for: Saby Mondal | Packsmart India Pvt Ltd
-# ------------------------------------------------------------
+# -------------------------------------------------------------
 
 from io import BytesIO
 import os
@@ -31,7 +31,7 @@ ACCENT_WIP = "#f4a261"
 ACCENT_FG = "#2a9d8f"
 CARD_BG = "#ffffff"
 
-# Raw Material type master list (controls the dropdown on Raw Materials page)
+# Raw Material type master list (controls the drop-down in Raw Materials page)
 RM_TYPES = [
     "Paper Reel",
     "GUM / Adhesives",
@@ -40,7 +40,7 @@ RM_TYPES = [
     "Board / Sheet",
     "Ink / Chemicals",
     "Packaging Accessories",
-    "Others",
+    "Others"
 ]
 
 st.markdown(f"""
@@ -181,7 +181,7 @@ def init_db():
               MoveId INTEGER PRIMARY KEY AUTOINCREMENT,
               ReelId INTEGER NOT NULL,
               DateTime TEXT NOT NULL,
-              Type TEXT NOT NULL,
+              Type TEXT NOT NULL,  -- Receive/Issue/Return/TransferIn/TransferOut/Adjust/Hold/Release/Scrap
               QtyKg REAL DEFAULT 0,
               FromBinId INTEGER,
               ToBinId INTEGER,
@@ -192,7 +192,7 @@ def init_db():
             )
         """)
 
-        # WIP
+        # Work In Process
         cur.execute("""
             CREATE TABLE IF NOT EXISTS WorkOrder(
               WOId INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -209,7 +209,7 @@ def init_db():
             CREATE TABLE IF NOT EXISTS WIP_Unit(
               UnitId INTEGER PRIMARY KEY AUTOINCREMENT,
               WOId INTEGER NOT NULL,
-              Step TEXT NOT NULL,
+              Step TEXT NOT NULL,  -- Corrugation/PrinterSlotter/DieCutter/FolderGluer/Stitcher/Bundling/QA
               Workcenter TEXT,
               PalletId TEXT,
               Qty REAL NOT NULL,
@@ -219,7 +219,7 @@ def init_db():
             )
         """)
 
-        # FG
+        # Finished Goods
         cur.execute("""
             CREATE TABLE IF NOT EXISTS FG_Pallet(
               PalletId TEXT PRIMARY KEY,
@@ -243,7 +243,7 @@ def init_db():
               MoveId INTEGER PRIMARY KEY AUTOINCREMENT,
               PalletId TEXT NOT NULL,
               DateTime TEXT NOT NULL,
-              Type TEXT NOT NULL,
+              Type TEXT NOT NULL,  -- Pack/Putaway/Reserve/Unreserve/Pick/Dispatch/Hold/Adjust
               Qty REAL NOT NULL,
               FromBinId INTEGER,
               ToBinId INTEGER,
@@ -295,11 +295,12 @@ def compute_reel_closing(conn, reel_id: int) -> Tuple[float, float]:
     closing = opening + receipts - (issues + scrap + trans_out) + trans_in + adjust
     return (round(consumed, 3), round(closing, 3))
 
+
 # =========================
 # Paper Reels: helpers
 # =========================
 
-# Display column grouping (for two-row headers)
+# Mapping of display columns -> group names (for two-row headers)
 COLUMN_GROUPS = {
     # Identity & Status
     "SL No.": "Identity & Status",
@@ -342,17 +343,23 @@ COLUMN_GROUPS = {
 }
 
 def group_columns_multiindex(df: pd.DataFrame) -> pd.DataFrame:
-    """Apply MultiIndex columns using COLUMN_GROUPS as the top level."""
+    """
+    Convert a flat DataFrame into a MultiIndex-column DataFrame
+    using COLUMN_GROUPS as the top-level header.
+    """
     tuples = []
     for col in df.columns:
-        tuples.append((COLUMN_GROUPS.get(col, ""), col))
-    if tuples:
+        top = COLUMN_GROUPS.get(col, "")
+        tuples.append((top, col))
+    if tuples and isinstance(tuples[0], tuple):
         df = df.copy()
         df.columns = pd.MultiIndex.from_tuples(tuples)
     return df
 
 def paper_cost_per_kg(row: pd.Series) -> float:
-    """Prefer Basic Landed Cost; else Paper + Transport rate."""
+    """
+    Prefer Basic Landed Cost; else Paper + Transport rate.
+    """
     try:
         basic = float(row.get("Basic Landed Cost/Kg", 0) or 0)
         if basic > 0:
@@ -364,13 +371,16 @@ def paper_cost_per_kg(row: pd.Series) -> float:
         return 0.0
 
 def build_paper_grid_with_calcs(raw_df: pd.DataFrame) -> pd.DataFrame:
-    """Takes the flat DataFrame from fetch_reel_grid() and fills computed columns."""
+    """
+    Takes the flat DataFrame from fetch_reel_grid() and
+    fills computed columns as per your specification.
+    """
     if raw_df.empty:
         return raw_df
 
     df = raw_df.copy()
 
-    # Reel Holding Time (Days): ensure present
+    # Reel Holding Time (Days) already calculated in SQL as julianday(...), but ensure present
     if "Material Rcv Dt." in df.columns and "Reel Holding Time (Days)" not in df.columns:
         try:
             rcvs = pd.to_datetime(df["Material Rcv Dt."], errors="coerce")
@@ -378,20 +388,25 @@ def build_paper_grid_with_calcs(raw_df: pd.DataFrame) -> pd.DataFrame:
         except Exception:
             df["Reel Holding Time (Days)"] = None
 
-    # Deckle in Inch mirrors Deckle in cm
+    # Ensure Deckle in Inch mirrors Deckle in cm (precision = 3)
     if "Deckle in cm" in df.columns:
         df["Deckle in Inch"] = (pd.to_numeric(df["Deckle in cm"], errors="coerce") / 2.54).round(3)
 
-    # Current Stock Value (INR)
+    # Closing Stock and Current Stock Value should already be present;
+    # still, (re)compute here to guarantee consistency if needed
     if "Closing Stock till date" in df.columns:
+        # Use numeric for multiplication
         close_numeric = pd.to_numeric(df["Closing Stock till date"], errors="coerce").fillna(0.0)
+        # Determine per-kg cost
         perkg = df.apply(paper_cost_per_kg, axis=1)
         df["Current Stock Value(INR)"] = (close_numeric * perkg).round(2)
 
+    # Reorder alerts can be styled in the UI (we already do via styler)
     return df
 
 # -------- Excel Upload (bulk import) ----------
 PAPER_EXCEL_COLUMNS = [
+    # Keep headers user-friendly but consistent with our receive form
     "SL No.",
     "Reel No",
     "Reel Supplier",
@@ -404,7 +419,7 @@ PAPER_EXCEL_COLUMNS = [
     "Paper Shade",
     "Opening Stk Till Date (Kg)",
     "Weight (Kg)",
-    "Reel Location",          # e.g., "Main WH/A-1-01"
+    "Reel Location",          # Warehouse/Aisle-Rack-Bin e.g., "Main WH/A-1-01"
     "Delivery Challan No.",
     "Reorder Level (Kg)",
     "Paper Rate/Kg",
@@ -417,13 +432,14 @@ def get_or_create_id(conn, table: str, key_field: str, key_value: str, id_field:
     cur = conn.cursor()
     cur.execute(f"SELECT {id_field} FROM {table} WHERE {key_field}=?", (key_value,))
     r = cur.fetchone()
-    if r:
-        return r[0]
+    if r: return r[0]
     cur.execute(f"INSERT INTO {table}({key_field}) VALUES(?)", (key_value,))
     return cur.lastrowid
 
-def parse_bin_label(conn, label: str) -> Optional[int]:
-    """Convert a label like 'Main WH/A-1-01' into BinId. If not found, create Warehouse/Bin."""
+def parse_bin_label(conn, label: str) -> int:
+    """
+    Convert a label like 'Main WH/A-1-01' into BinId. If not found, create Warehouse/Bin.
+    """
     try:
         wh_name, rest = label.split("/", 1)
         aisle, rack, bin_ = rest.split("-")
@@ -436,7 +452,7 @@ def parse_bin_label(conn, label: str) -> Optional[int]:
         else:
             cur.execute("INSERT INTO Warehouse(Name) VALUES(?)", (wh_name.strip(),))
             wh_id = cur.lastrowid
-        # Bin
+        # Bin (unique per WH/Aisle/Rack/Bin)
         cur.execute("""SELECT BinId FROM Bin
                        WHERE WarehouseId=? AND Aisle=? AND Rack=? AND Bin=?""",
                     (wh_id, aisle.strip(), rack.strip(), bin_.strip()))
@@ -460,17 +476,19 @@ def make_paper_excel_template() -> BytesIO:
 def rm_upload_excel_ui():
     st.subheader("⬆ Upload Paper Reels (Excel)")
     st.caption("Accepted: .xlsx with header row. Use the template for correct columns.")
+    colA, colB = st.columns([1, 3])
+    with colA:
+        if st.button("Download Template (.xlsx)", use_container_width=True):
+            st.download_button(
+                label="Click to download template",
+                data=make_paper_excel_template().getvalue(),
+                file_name="paper_reels_template.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
+    with colB:
+        uploaded = st.file_uploader("Upload Excel file", type=["xlsx"], key="paper_excel_uploader")
 
-    # Direct download button
-    st.download_button(
-        label="Download Template (.xlsx)",
-        data=make_paper_excel_template().getvalue(),
-        file_name="paper_reels_template.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        use_container_width=False
-    )
-
-    uploaded = st.file_uploader("Upload Excel file", type=["xlsx"], key="paper_excel_uploader")
     if uploaded is None:
         return
 
@@ -481,7 +499,7 @@ def rm_upload_excel_ui():
         st.error(f"Could not read Excel: {e}")
         return
 
-    # Column check
+    # Basic column check (soft match ignoring small naming variations)
     missing = [c for c in PAPER_EXCEL_COLUMNS if c not in xdf.columns]
     if missing:
         st.error(f"Missing columns in Excel: {missing}")
@@ -529,7 +547,7 @@ def rm_upload_excel_ui():
             # ReelId
             cur.execute("SELECT ReelId, WeightKg FROM PaperReel WHERE ReelNo=?", (str(r["Reel No"]).strip(),))
             row = cur.fetchone()
-            if not row:  # duplicate or failed; skip movement
+            if not row:  # couldn't insert (duplicate?) -> skip movement
                 continue
             reel_id, wt = int(row[0]), float(row[1] or 0.0)
             # Add Receive movement (so Closing Stock works)
@@ -543,15 +561,18 @@ def rm_upload_excel_ui():
     st.rerun()
 
 def insert_two_sample_reels():
-    """Adds two sample reels (SAMPLE-PR-1, SAMPLE-PR-2)."""
+    """
+    Adds two sample reels (SAMPLE-PR-1, SAMPLE-PR-2) so you can validate the logic.
+    Safe to click multiple times because of INSERT OR IGNORE.
+    """
     with get_conn() as conn:
         cur = conn.cursor()
         # Ensure a bin exists
         cur.execute("SELECT BinId FROM Bin LIMIT 1")
         rb = cur.fetchone()
-        if rb:
-            sample_bin = int(rb[0])
+        if rb: sample_bin = int(rb[0])
         else:
+            # Create default WH/Bin
             cur.execute("INSERT INTO Warehouse(Name) VALUES('Main WH')"); wh_id = cur.lastrowid
             cur.execute("INSERT INTO Bin(WarehouseId, Aisle, Rack, Bin) VALUES(?,?,?,?)", (wh_id, "A","1","01"))
             sample_bin = cur.lastrowid
@@ -571,10 +592,8 @@ def insert_two_sample_reels():
               180.0, 150, 22, "Natural", 0.0, 1100.0, sample_bin,
               "DC-S1", 300.0, 45.0, 2.5, 47.5, "Sample row 1"))
         cur.execute("SELECT ReelId FROM PaperReel WHERE ReelNo='SAMPLE-PR-1'"); rid1 = cur.fetchone()[0]
-        cur.execute("""
-            INSERT OR IGNORE INTO RM_Movement(ReelId, DateTime, Type, QtyKg, ToBinId, RefDocType, RefDocNo)
-            VALUES(?,?,?,?,?,?,?)
-        """, (rid1, datetime.now().isoformat(), "Receive", 1100.0, sample_bin, "SAMPLE","S1"))
+        cur.execute("INSERT OR IGNORE INTO RM_Movement(ReelId, DateTime, Type, QtyKg, ToBinId, RefDocType, RefDocNo) VALUES(?,?,?,?,?,?,?)",
+                    (rid1, datetime.now().isoformat(), "Receive", 1100.0, sample_bin, "SAMPLE","S1"))
 
         # Sample 2
         cur.execute("""
@@ -588,166 +607,8 @@ def insert_two_sample_reels():
               160.0, 120, 18, "Brown", 0.0, 950.0, sample_bin,
               "DC-S2", 250.0, 42.0, 2.0, 44.0, "Sample row 2"))
         cur.execute("SELECT ReelId FROM PaperReel WHERE ReelNo='SAMPLE-PR-2'"); rid2 = cur.fetchone()[0]
-        cur.execute("""
-            INSERT OR IGNORE INTO RM_Movement(ReelId, DateTime, Type, QtyKg, ToBinId, RefDocType, RefDocNo)
-            VALUES(?,?,?,?,?,?,?)
-        """, (rid2, datetime.now().isoformat(), "Receive", 950.0, sample_bin, "SAMPLE","S2"))
-
-# =========================
-# Paper Reels: Edit/Delete helpers (Simple & Stable)
-# =========================
-
-PAPER_EDITABLE_MAP = {
-    "SL No.": "SLNo",
-    "Material Rcv Dt.": "ReceiveDate",
-    "Maker's/Supplier's Inv Dt.": "SupplierInvDate",
-    "Deckle in cm": "DeckleCm",
-    "GSM": "GSM",
-    "BF": "BF",
-    "Paper Shade": "Shade",
-    "Opening Stk Till Date": "OpeningKg",
-    "Weight (Kg)": "WeightKg",
-    "Consume Dt": "LastConsumeDate",
-    "Consumption Entry Date": "ConsumptionEntryDate",
-    "Reel Shifting Date": "ReelShiftingDate",
-    "Delivery Challan No.": "DeliveryChallanNo",
-    "Reorder Level": "ReorderLevelKg",
-    "Paper Rate/Kg": "PaperRatePerKg",
-    "Transport Rate/Kg": "TransportRatePerKg",
-    "Basic Landed Cost/Kg": "BasicLandedCostPerKg",
-    "Remarks": "Remarks",
-}
-
-PAPER_EDIT_COLUMNS_ORDER = [
-    "Select",
-    "Reel No",
-    "SL No.",
-    "Material Rcv Dt.",
-    "Maker's/Supplier's Inv Dt.",
-    "Deckle in cm",
-    "Deckle in Inch",
-    "GSM",
-    "BF",
-    "Paper Shade",
-    "Opening Stk Till Date",
-    "Weight (Kg)",
-    "Consume Dt",
-    "Consumption Entry Date",
-    "Reel Shifting Date",
-    "Delivery Challan No.",
-    "Reorder Level",
-    "Paper Rate/Kg",
-    "Transport Rate/Kg",
-    "Basic Landed Cost/Kg",
-    "Remarks",
-]
-
-def _norm_date(val):
-    """Normalize a UI value into ISO 'YYYY-MM-DD' or None for DB."""
-    if val is None or val == "" or (isinstance(val, float) and pd.isna(val)):
-        return None
-    try:
-        ts = pd.to_datetime(val, errors="coerce")
-        if pd.isna(ts):
-            return None
-        return ts.date().isoformat()
-    except Exception:
-        return None
-
-def build_paper_edit_df(calc_df: pd.DataFrame) -> pd.DataFrame:
-    """Return a smaller, ordered dataframe for editing."""
-    if calc_df.empty:
-        return pd.DataFrame(columns=PAPER_EDIT_COLUMNS_ORDER)
-
-    df = calc_df.copy()
-
-    # Deckle in Inch mirrors Deckle in cm (3 decimals)
-    if "Deckle in cm" in df.columns:
-        df["Deckle in Inch"] = (pd.to_numeric(df["Deckle in cm"], errors="coerce") / 2.54).round(3)
-
-    # Align naming if needed
-    if "Opening Stk Till Date (Kg)" in df.columns and "Opening Stk Till Date" not in df.columns:
-        df = df.rename(columns={"Opening Stk Till Date (Kg)": "Opening Stk Till Date"})
-
-    # Compose editor frame
-    edit_df = pd.DataFrame()
-    edit_df["Select"] = False
-    for col in PAPER_EDIT_COLUMNS_ORDER:
-        if col == "Select":
-            continue
-        edit_df[col] = df[col] if col in df.columns else None
-
-    return edit_df[PAPER_EDIT_COLUMNS_ORDER]
-
-def _coerce_value(db_field: str, ui_value):
-    """Type-safe coercion before DB UPDATE."""
-    numeric_fields = {"DeckleCm","GSM","BF","OpeningKg","WeightKg","ReorderLevelKg","PaperRatePerKg","TransportRatePerKg","BasicLandedCostPerKg"}
-    date_fields    = {"ReceiveDate","SupplierInvDate","LastConsumeDate","ConsumptionEntryDate","ReelShiftingDate"}
-    if db_field in numeric_fields:
-        try:
-            return float(ui_value) if ui_value not in (None, "") else None
-        except Exception:
-            return None
-    if db_field in date_fields:
-        return _norm_date(ui_value)
-    return None if ui_value in (None, "") else str(ui_value)
-
-def save_paper_edits(orig_df: pd.DataFrame, edited_df: pd.DataFrame) -> int:
-    """Diff original vs edited, and persist updates to DB."""
-    if edited_df is None or edited_df.empty:
-        return 0
-    o = orig_df.set_index("Reel No", drop=False)
-    e = edited_df.set_index("Reel No", drop=False)
-
-    changed_rows = 0
-    with get_conn() as conn:
-        cur = conn.cursor()
-        for reel_no, row in e.iterrows():
-            if reel_no not in o.index:
-                continue
-            updates, params = [], []
-            for ui_col, db_field in PAPER_EDITABLE_MAP.items():
-                if ui_col not in e.columns or ui_col not in o.columns:
-                    continue
-                old_val = o.loc[reel_no, ui_col]
-                new_val = row[ui_col]
-                if db_field in {"ReceiveDate","SupplierInvDate","LastConsumeDate","ConsumptionEntryDate","ReelShiftingDate"}:
-                    old_norm = _norm_date(old_val)
-                    new_norm = _norm_date(new_val)
-                    if old_norm != new_norm:
-                        updates.append(f"{db_field}=?")
-                        params.append(new_norm)
-                else:
-                    if str(old_val) != str(new_val):
-                        updates.append(f"{db_field}=?")
-                        params.append(_coerce_value(db_field, new_val))
-            if updates:
-                params.append(reel_no)
-                cur.execute(f"UPDATE PaperReel SET {', '.join(updates)} WHERE ReelNo=?", params)
-                changed_rows += 1
-    return changed_rows
-
-def delete_paper_rows(edited_df: pd.DataFrame) -> int:
-    """Delete rows where 'Select' == True (also cleans RM_Movement)."""
-    if edited_df is None or edited_df.empty or "Select" not in edited_df.columns:
-        return 0
-    selected = edited_df[edited_df["Select"] == True]  # noqa: E712
-    if selected.empty:
-        return 0
-    reel_nos = selected["Reel No"].dropna().astype(str).tolist()
-    deleted = 0
-    with get_conn() as conn:
-        cur = conn.cursor()
-        for rn in reel_nos:
-            cur.execute("SELECT ReelId FROM PaperReel WHERE ReelNo=?", (rn,))
-            r = cur.fetchone()
-            if not r:
-                continue
-            rid = int(r[0])
-            cur.execute("DELETE FROM RM_Movement WHERE ReelId=?", (rid,))
-            cur.execute("DELETE FROM PaperReel   WHERE ReelId=?", (rid,))
-            deleted += 1
-    return deleted
+        cur.execute("INSERT OR IGNORE INTO RM_Movement(ReelId, DateTime, Type, QtyKg, ToBinId, RefDocType, RefDocNo) VALUES(?,?,?,?,?,?,?)",
+                    (rid2, datetime.now().isoformat(), "Receive", 950.0, sample_bin, "SAMPLE","S2"))
 
 # -------------------------
 # Demo Data seeding
@@ -860,6 +721,7 @@ page = st.session_state.left_nav
 def show_dashboard():
     col1, col2, col3 = st.columns(3)
     with get_conn() as conn:
+        # RM summary
         rids = pd.read_sql_query("SELECT ReelId FROM PaperReel", conn)
         total_rm_kg = 0.0
         for _, r in rids.iterrows():
@@ -867,6 +729,7 @@ def show_dashboard():
             total_rm_kg += closing
         total_reels = len(rids)
 
+        # WIP summary
         wip_qty = pd.read_sql_query(
             "SELECT COALESCE(SUM(Qty),0) AS Qty FROM WIP_Unit WHERE Status='In-Process'", conn
         ).iloc[0]["Qty"]
@@ -874,6 +737,7 @@ def show_dashboard():
             "SELECT COUNT(*) AS Cnt FROM WIP_Unit WHERE Status='In-Process'", conn
         ).iloc[0]["Cnt"]
 
+        # FG summary (ATP)
         fg = pd.read_sql_query("""
             SELECT COALESCE(SUM(OnHandQty - ReservedQty - HoldQty),0) AS ATP,
                    COUNT(*) AS Pallets
@@ -909,6 +773,7 @@ def show_dashboard():
         st.subheader("➕ Add Inventory")
         st.caption("Use **Raw Materials** or **Finished Goods** pages for detailed operations.")
         if st.button("Go to Raw Materials", use_container_width=True, type="primary"):
+            # Set pending nav and rerun; on next run the radio starts on the target page
             st.session_state["_pending_nav"] = "Raw Materials"
             st.rerun()
     with c2:
@@ -919,7 +784,7 @@ def show_dashboard():
             st.rerun()
 
 # -------------------------
-# Raw Materials (Paper Reels and others)
+# Raw Materials (Paper Reels)
 # -------------------------
 def fetch_reel_grid() -> pd.DataFrame:
     with get_conn() as conn:
@@ -1097,28 +962,21 @@ def rm_transfer_adjust_form():
             rid = rmap[chosen]
             if action == "Transfer":
                 to_bin = int(bins[bins["Label"] == bin_label]["BinId"].iloc[0])
-                cur.execute("""
-                    INSERT INTO RM_Movement(ReelId, DateTime, Type, QtyKg, ToBinId, RefDocNo)
-                    VALUES(?,?,?,?,?,?)
-                """, (rid, datetime.now().isoformat(), "TransferIn", 0.0, to_bin, refdoc))
+                cur.execute("INSERT INTO RM_Movement(ReelId, DateTime, Type, QtyKg, ToBinId, RefDocNo) VALUES(?,?,?,?,?,?)",
+                            (rid, datetime.now().isoformat(), "TransferIn", 0.0, to_bin, refdoc))
                 cur.execute("UPDATE PaperReel SET ReelLocationBinId=?, ReelShiftDate=? WHERE ReelId=?",
                             (to_bin, datetime.now().isoformat(), rid))
             elif action == "Adjust (+/-)":
-                cur.execute("""
-                    INSERT INTO RM_Movement(ReelId, DateTime, Type, QtyKg, RefDocNo)
-                    VALUES(?,?,?,?,?)
-                """, (rid, datetime.now().isoformat(), "Adjust", qty, refdoc))
+                cur.execute("INSERT INTO RM_Movement(ReelId, DateTime, Type, QtyKg, RefDocNo) VALUES(?,?,?,?,?)",
+                            (rid, datetime.now().isoformat(), "Adjust", qty, refdoc))
             elif action == "Mark Hold":
-                cur.execute("""
-                    INSERT INTO RM_Movement(ReelId, DateTime, Type, QtyKg, RefDocNo)
-                    VALUES(?,?,?,?,?)
-                """, (rid, datetime.now().isoformat(), "Hold", 0.0, refdoc))
+                cur.execute("INSERT INTO RM_Movement(ReelId, DateTime, Type, QtyKg, RefDocNo) VALUES(?,?,?,?,?)",
+                            (rid, datetime.now().isoformat(), "Hold", 0.0, refdoc))
             elif action == "Release Hold":
-                cur.execute("""
-                    INSERT INTO RM_Movement(ReelId, DateTime, Type, QtyKg, RefDocNo)
-                    VALUES(?,?,?,?,?)
-                """, (rid, datetime.now().isoformat(), "Release", 0.0, refdoc))
+                cur.execute("INSERT INTO RM_Movement(ReelId, DateTime, Type, QtyKg, RefDocNo) VALUES(?,?,?,?,?)",
+                            (rid, datetime.now().isoformat(), "Release", 0.0, refdoc))
         st.success(f"{action} recorded for **{chosen}**.")
+
 
 def show_raw_materials():
     # 1) RM Type selector (always first)
@@ -1136,24 +994,44 @@ def show_raw_materials():
     if rm_type == "Paper Reel":
         # ---------- Paper Reels UI ----------
         st.markdown("### Paper Reels")
-        ca, cb, _ = st.columns([1, 1, 3])
+        # Quick actions row
+        ca, cb, cc = st.columns([1, 1, 3])
         with ca:
             if st.button("➕ Add 2 Sample Reels", use_container_width=True):
                 insert_two_sample_reels()
                 st.rerun()
         with cb:
-            grouped = st.toggle("Group columns (two-row headers)", value=True,
-                                help="Show grouped headers for readability.")
+            # group toggle
+            grouped = st.toggle("Group columns (two-row headers)", value=True, help="Show grouped headers for readability.")
+        with cc:
+            pass
 
         # Grid
         with st.container(border=True):
             st.caption("Tip: Use column filters and the inbuilt download to export.")
+            # Fetch base grid
             base_df = fetch_reel_grid()
+            # Compute/refresh calculated columns
             calc_df = build_paper_grid_with_calcs(base_df)
+
+            # Rename columns to match your grouping labels (minor alignment)
+            rename_map = {
+                "Opening Stk Till Date": "Opening Stk Till Date",
+                # (already aligned)
+            }
+            calc_df = calc_df.rename(columns=rename_map)
+
+            # Ensure Reel Location text column exists (already in fetch), ensure Holding Time label consistent
+            if "Reel Holding Time (Days)" not in calc_df.columns and "Reel Holding Time (Days) " in calc_df.columns:
+                calc_df = calc_df.rename(columns={"Reel Holding Time (Days) ": "Reel Holding Time (Days)"})
+
+            # Convert to grouped two-row header if toggle is on
             display_df = group_columns_multiindex(calc_df) if grouped else calc_df
 
+            # Style (highlight rows at/below reorder)
             def highlight_reorder(row):
                 try:
+                    # Work for both flat and two-level headers
                     if isinstance(row.index, pd.MultiIndex):
                         closing = row.get(("Stock & Consumption", "Closing Stock till date"), None)
                         reorder = row.get(("Stock & Consumption", "Reorder Level"), None)
@@ -1172,64 +1050,11 @@ def show_raw_materials():
                 hide_index=True
             )
 
-        # Edit/Delete panel (simple & stable)
-        with st.expander("✏️ Edit / Delete rows (single or bulk)", expanded=False):
-            base_df = fetch_reel_grid()
-            calc_df = build_paper_grid_with_calcs(base_df)
-            edit_df = build_paper_edit_df(calc_df)
-
-            DATE_COLS = [
-                "Material Rcv Dt.", "Maker's/Supplier's Inv Dt.",
-                "Consume Dt", "Consumption Entry Date", "Reel Shifting Date"
-            ]
-            for c in DATE_COLS:
-                if c in edit_df.columns:
-                    s = pd.to_datetime(edit_df[c], errors="coerce")
-                    edit_df[c] = s.dt.date
-
-            if "paper_edit_orig" not in st.session_state:
-                st.session_state.paper_edit_orig = edit_df.copy(deep=True)
-            if "paper_edit_df" not in st.session_state:
-                st.session_state.paper_edit_df = edit_df.copy(deep=True)
-
-            st.caption("Edit inline. Tick **Select** to mark rows for deletion. Save or Delete below.")
-            edited = st.data_editor(st.session_state.paper_edit_df, use_container_width=True, key="paper_editor")
-            st.session_state.paper_edit_df = edited
-
-            c1, c2, c3 = st.columns([1, 1, 2])
-            with c1:
-                if st.button("💾 Save changes", type="primary", use_container_width=True):
-                    try:
-                        n = save_paper_edits(st.session_state.paper_edit_orig, st.session_state.paper_edit_df)
-                        st.success(f"Saved {n} row(s).")
-                    except Exception as e:
-                        st.error(f"Could not save changes: {e}")
-                    finally:
-                        st.session_state.pop("paper_edit_orig", None)
-                        st.session_state.pop("paper_edit_df",   None)
-                        st.rerun()
-            with c2:
-                if st.button("🗑 Delete selected", type="secondary", use_container_width=True):
-                    try:
-                        n = delete_paper_rows(st.session_state.paper_edit_df)
-                        st.warning(f"Deleted {n} row(s)." if n > 0 else "No rows selected.")
-                    except Exception as e:
-                        st.error(f"Could not delete rows: {e}")
-                    finally:
-                        st.session_state.pop("paper_edit_orig", None)
-                        st.session_state.pop("paper_edit_df",   None)
-                        st.rerun()
-            with c3:
-                if st.button("↻ Reload table", use_container_width=True):
-                    st.session_state.pop("paper_edit_orig", None)
-                    st.session_state.pop("paper_edit_df",   None)
-                    st.rerun()
-
         # Upload Excel expander
         with st.expander("⬆ Upload Paper Reels from Excel (.xlsx)", expanded=False):
             rm_upload_excel_ui()
 
-        # Forms as tabs (Receive / Issue / Transfer)
+        # The existing forms as tabs (Receive / Issue / Transfer)
         tabs = st.tabs(["📥 Receive", "📤 Issue", "🔁 Transfer/Adjust"])
         t2, t3, t4 = tabs
         with t2:
@@ -1280,10 +1105,16 @@ def show_raw_materials():
                 "- Type (Corner, Edge, Bubble, Film, Tape), Size, UoM, Supplier, Bin, **On-hand**\n"
                 "- **Receive / Issue / Transfer / Adjust**"
             )
+        else:
+            st.markdown(
+                "- Define specs, commercial fields, stock fields, and QA needs for this material type\n"
+                "- **Receive / Issue / Transfer / Adjust**"
+            )
 
     if st.button("🔁 Switch to Paper Reel"):
         st.session_state.rm_type_selector = "Paper Reel"
         st.rerun()
+
 
 # -------------------------
 # WIP
