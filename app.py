@@ -4,6 +4,7 @@
 # Prepared for: Saby Mondal | Packsmart India Pvt Ltd
 # -------------------------------------------------------------
 
+from io import BytesIO
 import os
 import sqlite3
 from contextlib import contextmanager
@@ -293,6 +294,321 @@ def compute_reel_closing(conn, reel_id: int) -> Tuple[float, float]:
     consumed = issues + scrap
     closing = opening + receipts - (issues + scrap + trans_out) + trans_in + adjust
     return (round(consumed, 3), round(closing, 3))
+
+
+# =========================
+# Paper Reels: helpers
+# =========================
+
+# Mapping of display columns -> group names (for two-row headers)
+COLUMN_GROUPS = {
+    # Identity & Status
+    "SL No.": "Identity & Status",
+    "Reel No": "Identity & Status",
+    "Reel Location": "Identity & Status",
+    "Reel Holding Time (Days)": "Identity & Status",
+    "Remarks": "Identity & Status",
+
+    # Commercials & Links
+    "Reel Supplier": "Commercials & Links",
+    "Reel Maker": "Commercials & Links",
+    "Material Rcv Dt.": "Commercials & Links",
+    "Maker's/Supplier's Inv Dt.": "Commercials & Links",
+    "Delivery Challan No.": "Commercials & Links",
+    "Paper Rate/Kg": "Commercials & Links",
+    "Transport Rate/Kg": "Commercials & Links",
+    "Basic Landed Cost/Kg": "Commercials & Links",
+    "Current Stock Value(INR)": "Commercials & Links",
+
+    # Technical Specs
+    "Deckle in cm": "Technical Specs",
+    "Deckle in Inch": "Technical Specs",
+    "GSM": "Technical Specs",
+    "BF": "Technical Specs",
+    "Paper Shade": "Technical Specs",
+
+    # Stock & Consumption
+    "Opening Stk Till Date": "Stock & Consumption",
+    "Weight (Kg)": "Stock & Consumption",
+    "Consumed Wt": "Stock & Consumption",
+    "Consume Dt": "Stock & Consumption",
+    "Consumption Entry Date": "Stock & Consumption",
+    "Closing Stock till date": "Stock & Consumption",
+    "Reorder Level": "Stock & Consumption",
+
+    # Planning Hooks
+    "Target SKU": "Planning Hooks",
+    "Target Customer": "Planning Hooks",
+    "Reel Shifting Date": "Planning Hooks",
+}
+
+def group_columns_multiindex(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Convert a flat DataFrame into a MultiIndex-column DataFrame
+    using COLUMN_GROUPS as the top-level header.
+    """
+    tuples = []
+    for col in df.columns:
+        top = COLUMN_GROUPS.get(col, "")
+        tuples.append((top, col))
+    if tuples and isinstance(tuples[0], tuple):
+        df = df.copy()
+        df.columns = pd.MultiIndex.from_tuples(tuples)
+    return df
+
+def paper_cost_per_kg(row: pd.Series) -> float:
+    """
+    Prefer Basic Landed Cost; else Paper + Transport rate.
+    """
+    try:
+        basic = float(row.get("Basic Landed Cost/Kg", 0) or 0)
+        if basic > 0:
+            return basic
+        pr = float(row.get("Paper Rate/Kg", 0) or 0)
+        tr = float(row.get("Transport Rate/Kg", 0) or 0)
+        return pr + tr
+    except Exception:
+        return 0.0
+
+def build_paper_grid_with_calcs(raw_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Takes the flat DataFrame from fetch_reel_grid() and
+    fills computed columns as per your specification.
+    """
+    if raw_df.empty:
+        return raw_df
+
+    df = raw_df.copy()
+
+    # Reel Holding Time (Days) already calculated in SQL as julianday(...), but ensure present
+    if "Material Rcv Dt." in df.columns and "Reel Holding Time (Days)" not in df.columns:
+        try:
+            rcvs = pd.to_datetime(df["Material Rcv Dt."], errors="coerce")
+            df["Reel Holding Time (Days)"] = (pd.Timestamp.today().normalize() - rcvs).dt.days
+        except Exception:
+            df["Reel Holding Time (Days)"] = None
+
+    # Ensure Deckle in Inch mirrors Deckle in cm (precision = 3)
+    if "Deckle in cm" in df.columns:
+        df["Deckle in Inch"] = (pd.to_numeric(df["Deckle in cm"], errors="coerce") / 2.54).round(3)
+
+    # Closing Stock and Current Stock Value should already be present;
+    # still, (re)compute here to guarantee consistency if needed
+    if "Closing Stock till date" in df.columns:
+        # Use numeric for multiplication
+        close_numeric = pd.to_numeric(df["Closing Stock till date"], errors="coerce").fillna(0.0)
+        # Determine per-kg cost
+        perkg = df.apply(paper_cost_per_kg, axis=1)
+        df["Current Stock Value(INR)"] = (close_numeric * perkg).round(2)
+
+    # Reorder alerts can be styled in the UI (we already do via styler)
+    return df
+
+# -------- Excel Upload (bulk import) ----------
+PAPER_EXCEL_COLUMNS = [
+    # Keep headers user-friendly but consistent with our receive form
+    "SL No.",
+    "Reel No",
+    "Reel Supplier",
+    "Reel Maker",
+    "Material Rcv Dt.",
+    "Maker's/Supplier's Inv Dt.",
+    "Deckle in cm",
+    "GSM",
+    "BF",
+    "Paper Shade",
+    "Opening Stk Till Date (Kg)",
+    "Weight (Kg)",
+    "Reel Location",          # Warehouse/Aisle-Rack-Bin e.g., "Main WH/A-1-01"
+    "Delivery Challan No.",
+    "Reorder Level (Kg)",
+    "Paper Rate/Kg",
+    "Transport Rate/Kg",
+    "Basic Landed Cost/Kg",
+    "Remarks",
+]
+
+def get_or_create_id(conn, table: str, key_field: str, key_value: str, id_field: str):
+    cur = conn.cursor()
+    cur.execute(f"SELECT {id_field} FROM {table} WHERE {key_field}=?", (key_value,))
+    r = cur.fetchone()
+    if r: return r[0]
+    cur.execute(f"INSERT INTO {table}({key_field}) VALUES(?)", (key_value,))
+    return cur.lastrowid
+
+def parse_bin_label(conn, label: str) -> int:
+    """
+    Convert a label like 'Main WH/A-1-01' into BinId. If not found, create Warehouse/Bin.
+    """
+    try:
+        wh_name, rest = label.split("/", 1)
+        aisle, rack, bin_ = rest.split("-")
+        cur = conn.cursor()
+        # Warehouse
+        cur.execute("SELECT WarehouseId FROM Warehouse WHERE Name=?", (wh_name.strip(),))
+        r = cur.fetchone()
+        if r:
+            wh_id = int(r[0])
+        else:
+            cur.execute("INSERT INTO Warehouse(Name) VALUES(?)", (wh_name.strip(),))
+            wh_id = cur.lastrowid
+        # Bin (unique per WH/Aisle/Rack/Bin)
+        cur.execute("""SELECT BinId FROM Bin
+                       WHERE WarehouseId=? AND Aisle=? AND Rack=? AND Bin=?""",
+                    (wh_id, aisle.strip(), rack.strip(), bin_.strip()))
+        r = cur.fetchone()
+        if r:
+            return int(r[0])
+        cur.execute("INSERT INTO Bin(WarehouseId, Aisle, Rack, Bin) VALUES(?,?,?,?)",
+                    (wh_id, aisle.strip(), rack.strip(), bin_.strip()))
+        return cur.lastrowid
+    except Exception:
+        return None
+
+def make_paper_excel_template() -> BytesIO:
+    df = pd.DataFrame(columns=PAPER_EXCEL_COLUMNS)
+    buf = BytesIO()
+    with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="PaperReels")
+    buf.seek(0)
+    return buf
+
+def rm_upload_excel_ui():
+    st.subheader("⬆ Upload Paper Reels (Excel)")
+    st.caption("Accepted: .xlsx with header row. Use the template for correct columns.")
+    colA, colB = st.columns([1, 3])
+    with colA:
+        if st.button("Download Template (.xlsx)", use_container_width=True):
+            st.download_button(
+                label="Click to download template",
+                data=make_paper_excel_template().getvalue(),
+                file_name="paper_reels_template.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
+    with colB:
+        uploaded = st.file_uploader("Upload Excel file", type=["xlsx"], key="paper_excel_uploader")
+
+    if uploaded is None:
+        return
+
+    # Read Excel
+    try:
+        xdf = pd.read_excel(uploaded, engine="openpyxl")
+    except Exception as e:
+        st.error(f"Could not read Excel: {e}")
+        return
+
+    # Basic column check (soft match ignoring small naming variations)
+    missing = [c for c in PAPER_EXCEL_COLUMNS if c not in xdf.columns]
+    if missing:
+        st.error(f"Missing columns in Excel: {missing}")
+        st.info("Please download the template and fill it, or align your headers accordingly.")
+        return
+
+    # Insert rows
+    inserted = 0
+    with get_conn() as conn:
+        cur = conn.cursor()
+        for _, r in xdf.iterrows():
+            # Supplier, Maker, Bin
+            supplier_id = get_or_create_id(conn, "Supplier", "Name", str(r["Reel Supplier"]).strip(), "SupplierId")
+            maker_id    = get_or_create_id(conn, "Maker", "Name", str(r["Reel Maker"]).strip(), "MakerId")
+            bin_id      = parse_bin_label(conn, str(r["Reel Location"]).strip()) if pd.notna(r["Reel Location"]) else None
+
+            # Insert into PaperReel
+            cur.execute("""
+                INSERT OR IGNORE INTO PaperReel(
+                    SLNo, ReelNo, SupplierId, MakerId, ReceiveDate, SupplierInvDate,
+                    DeckleCm, GSM, BF, Shade, OpeningKg, WeightKg, ReelLocationBinId,
+                    DeliveryChallanNo, ReorderLevelKg, PaperRatePerKg, TransportRatePerKg,
+                    BasicLandedCostPerKg, Remarks
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """, (
+                str(r["SL No."]) if pd.notna(r["SL No."]) else None,
+                str(r["Reel No"]).strip(),
+                supplier_id, maker_id,
+                pd.to_datetime(r["Material Rcv Dt."]).date().isoformat() if pd.notna(r["Material Rcv Dt."]) else None,
+                pd.to_datetime(r["Maker's/Supplier's Inv Dt."]).date().isoformat() if pd.notna(r["Maker's/Supplier's Inv Dt."]) else None,
+                float(r["Deckle in cm"]) if pd.notna(r["Deckle in cm"]) else None,
+                int(r["GSM"]) if pd.notna(r["GSM"]) else None,
+                int(r["BF"]) if pd.notna(r["BF"]) else None,
+                str(r["Paper Shade"]).strip() if pd.notna(r["Paper Shade"]) else None,
+                float(r["Opening Stk Till Date (Kg)"]) if pd.notna(r["Opening Stk Till Date (Kg)"]) else 0.0,
+                float(r["Weight (Kg)"]) if pd.notna(r["Weight (Kg)"]) else 0.0,
+                bin_id,
+                str(r["Delivery Challan No."]).strip() if pd.notna(r["Delivery Challan No."]) else None,
+                float(r["Reorder Level (Kg)"]) if pd.notna(r["Reorder Level (Kg)"]) else 0.0,
+                float(r["Paper Rate/Kg"]) if pd.notna(r["Paper Rate/Kg"]) else 0.0,
+                float(r["Transport Rate/Kg"]) if pd.notna(r["Transport Rate/Kg"]) else 0.0,
+                float(r["Basic Landed Cost/Kg"]) if pd.notna(r["Basic Landed Cost/Kg"]) else 0.0,
+                str(r["Remarks"]).strip() if pd.notna(r["Remarks"]) else None
+            ))
+            # ReelId
+            cur.execute("SELECT ReelId, WeightKg FROM PaperReel WHERE ReelNo=?", (str(r["Reel No"]).strip(),))
+            row = cur.fetchone()
+            if not row:  # couldn't insert (duplicate?) -> skip movement
+                continue
+            reel_id, wt = int(row[0]), float(row[1] or 0.0)
+            # Add Receive movement (so Closing Stock works)
+            cur.execute("""
+                INSERT INTO RM_Movement(ReelId, DateTime, Type, QtyKg, ToBinId, RefDocType, RefDocNo)
+                VALUES(?,?,?,?,?,?,?)
+            """, (reel_id, datetime.now().isoformat(), "Receive", wt, bin_id, "Excel", "UPLOAD"))
+            inserted += 1
+
+    st.success(f"Imported {inserted} paper reels from Excel.")
+    st.rerun()
+
+def insert_two_sample_reels():
+    """
+    Adds two sample reels (SAMPLE-PR-1, SAMPLE-PR-2) so you can validate the logic.
+    Safe to click multiple times because of INSERT OR IGNORE.
+    """
+    with get_conn() as conn:
+        cur = conn.cursor()
+        # Ensure a bin exists
+        cur.execute("SELECT BinId FROM Bin LIMIT 1")
+        rb = cur.fetchone()
+        if rb: sample_bin = int(rb[0])
+        else:
+            # Create default WH/Bin
+            cur.execute("INSERT INTO Warehouse(Name) VALUES('Main WH')"); wh_id = cur.lastrowid
+            cur.execute("INSERT INTO Bin(WarehouseId, Aisle, Rack, Bin) VALUES(?,?,?,?)", (wh_id, "A","1","01"))
+            sample_bin = cur.lastrowid
+        # Supplier & Maker
+        sup = get_or_create_id(conn, "Supplier", "Name", "Demo Supplier", "SupplierId")
+        mk  = get_or_create_id(conn, "Maker", "Name", "Demo Maker", "MakerId")
+
+        # Sample 1
+        cur.execute("""
+            INSERT OR IGNORE INTO PaperReel(
+              SLNo, ReelNo, SupplierId, MakerId, ReceiveDate, SupplierInvDate,
+              DeckleCm, GSM, BF, Shade, OpeningKg, WeightKg, ReelLocationBinId,
+              DeliveryChallanNo, ReorderLevelKg, PaperRatePerKg, TransportRatePerKg,
+              BasicLandedCostPerKg, Remarks
+            ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """, ("S1","SAMPLE-PR-1", sup, mk, date.today().isoformat(), date.today().isoformat(),
+              180.0, 150, 22, "Natural", 0.0, 1100.0, sample_bin,
+              "DC-S1", 300.0, 45.0, 2.5, 47.5, "Sample row 1"))
+        cur.execute("SELECT ReelId FROM PaperReel WHERE ReelNo='SAMPLE-PR-1'"); rid1 = cur.fetchone()[0]
+        cur.execute("INSERT OR IGNORE INTO RM_Movement(ReelId, DateTime, Type, QtyKg, ToBinId, RefDocType, RefDocNo) VALUES(?,?,?,?,?,?,?)",
+                    (rid1, datetime.now().isoformat(), "Receive", 1100.0, sample_bin, "SAMPLE","S1"))
+
+        # Sample 2
+        cur.execute("""
+            INSERT OR IGNORE INTO PaperReel(
+              SLNo, ReelNo, SupplierId, MakerId, ReceiveDate, SupplierInvDate,
+              DeckleCm, GSM, BF, Shade, OpeningKg, WeightKg, ReelLocationBinId,
+              DeliveryChallanNo, ReorderLevelKg, PaperRatePerKg, TransportRatePerKg,
+              BasicLandedCostPerKg, Remarks
+            ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """, ("S2","SAMPLE-PR-2", sup, mk, date.today().isoformat(), date.today().isoformat(),
+              160.0, 120, 18, "Brown", 0.0, 950.0, sample_bin,
+              "DC-S2", 250.0, 42.0, 2.0, 44.0, "Sample row 2"))
+        cur.execute("SELECT ReelId FROM PaperReel WHERE ReelNo='SAMPLE-PR-2'"); rid2 = cur.fetchone()[0]
+        cur.execute("INSERT OR IGNORE INTO RM_Movement(ReelId, DateTime, Type, QtyKg, ToBinId, RefDocType, RefDocNo) VALUES(?,?,?,?,?,?,?)",
+                    (rid2, datetime.now().isoformat(), "Receive", 950.0, sample_bin, "SAMPLE","S2"))
 
 # -------------------------
 # Demo Data seeding
@@ -661,8 +977,9 @@ def rm_transfer_adjust_form():
                             (rid, datetime.now().isoformat(), "Release", 0.0, refdoc))
         st.success(f"{action} recorded for **{chosen}**.")
 
+
 def show_raw_materials():
-    # 1) First: the RM Type selector (always at the top)
+    # 1) RM Type selector (always first)
     st.subheader("Raw Materials")
     st.markdown("#### Select Raw Material Type")
     rm_type = st.selectbox(
@@ -673,57 +990,94 @@ def show_raw_materials():
         help="Choose a raw material type to view its inventory screen."
     )
 
-    # 2) Branch on selected RM type
+    # 2) Branch by RM Type
     if rm_type == "Paper Reel":
-        # ---------- EXISTING PAPER REEL UI (tabs) ----------
-        tabs = st.tabs(["📃 Paper Reels (Grid)", "📥 Receive", "📤 Issue", "🔁 Transfer/Adjust"])
-        t1, t2, t3, t4 = tabs
+        # ---------- Paper Reels UI ----------
+        st.markdown("### Paper Reels")
+        # Quick actions row
+        ca, cb, cc = st.columns([1, 1, 3])
+        with ca:
+            if st.button("➕ Add 2 Sample Reels", use_container_width=True):
+                insert_two_sample_reels()
+                st.rerun()
+        with cb:
+            # group toggle
+            grouped = st.toggle("Group columns (two-row headers)", value=True, help="Show grouped headers for readability.")
+        with cc:
+            pass
 
-        with t1:
+        # Grid
+        with st.container(border=True):
             st.caption("Tip: Use column filters and the inbuilt download to export.")
-            df = fetch_reel_grid()
+            # Fetch base grid
+            base_df = fetch_reel_grid()
+            # Compute/refresh calculated columns
+            calc_df = build_paper_grid_with_calcs(base_df)
 
+            # Rename columns to match your grouping labels (minor alignment)
+            rename_map = {
+                "Opening Stk Till Date": "Opening Stk Till Date",
+                # (already aligned)
+            }
+            calc_df = calc_df.rename(columns=rename_map)
+
+            # Ensure Reel Location text column exists (already in fetch), ensure Holding Time label consistent
+            if "Reel Holding Time (Days)" not in calc_df.columns and "Reel Holding Time (Days) " in calc_df.columns:
+                calc_df = calc_df.rename(columns={"Reel Holding Time (Days) ": "Reel Holding Time (Days)"})
+
+            # Convert to grouped two-row header if toggle is on
+            display_df = group_columns_multiindex(calc_df) if grouped else calc_df
+
+            # Style (highlight rows at/below reorder)
             def highlight_reorder(row):
                 try:
-                    if float(row["Closing Stock till date"]) <= float(row["Reorder Level"]):
+                    # Work for both flat and two-level headers
+                    if isinstance(row.index, pd.MultiIndex):
+                        closing = row.get(("Stock & Consumption", "Closing Stock till date"), None)
+                        reorder = row.get(("Stock & Consumption", "Reorder Level"), None)
+                    else:
+                        closing = row.get("Closing Stock till date", None)
+                        reorder = row.get("Reorder Level", None)
+                    if float(closing) <= float(reorder):
                         return ["background-color: #fff4f2"] * len(row)
                 except Exception:
                     pass
                 return [""] * len(row)
 
             st.dataframe(
-                df.style.apply(highlight_reorder, axis=1) if len(df) else df,
+                display_df.style.apply(highlight_reorder, axis=1) if len(display_df) else display_df,
                 use_container_width=True,
                 hide_index=True
             )
 
+        # Upload Excel expander
+        with st.expander("⬆ Upload Paper Reels from Excel (.xlsx)", expanded=False):
+            rm_upload_excel_ui()
+
+        # The existing forms as tabs (Receive / Issue / Transfer)
+        tabs = st.tabs(["📥 Receive", "📤 Issue", "🔁 Transfer/Adjust"])
+        t2, t3, t4 = tabs
         with t2:
             rm_receive_form()
-
         with t3:
             rm_issue_form()
-
         with t4:
             rm_transfer_adjust_form()
 
-        return  # Paper Reel branch ends here
+        return  # end Paper Reels
 
-    # ---------- PLACEHOLDER SCREENS FOR OTHER RM TYPES ----------
-    # (You can later replace each block below with its own table + forms.)
-
+    # ---------- PLACEHOLDERS for other RM types ----------
     st.markdown(f"### {rm_type}")
     st.info(
         f"The **{rm_type}** inventory screen is a placeholder for now. "
         f"You can plug in your own grid and forms here. "
         "If you want, I can scaffold the DB tables and UI like Paper Reels."
     )
-
-    # Suggested upcoming components for each RM type
     with st.expander("Suggested fields & actions", expanded=True):
         if rm_type == "GUM / Adhesives":
             st.markdown(
                 "- Batch No., Viscosity, Solid %, Container Size, **Expiry**, Supplier, Maker, "
-                "Receive Date, Bin, **On-hand (L/Kg)**, **Hold** flag, Remarks\n"
+                "Receive Date, Bin, **On-hand (L/Kg)**, Hold flag, Remarks\n"
                 "- **Receive / Issue / Transfer / Adjust / Hold/Release**"
             )
         elif rm_type == "Stitching Wire":
@@ -743,7 +1097,7 @@ def show_raw_materials():
             )
         elif rm_type == "Ink / Chemicals":
             st.markdown(
-                "- Shade/Color, Batch, **Expiry**, Viscosity (if applicable), Container Size, HSN/Hazard, Supplier, Bin\n"
+                "- Shade/Color, Batch, **Expiry**, Viscosity (if applicable), Container Size, Hazard code, Supplier, Bin\n"
                 "- **Receive / Issue / Transfer / Adjust / Hold/Release**"
             )
         elif rm_type == "Packaging Accessories":
@@ -753,11 +1107,10 @@ def show_raw_materials():
             )
         else:
             st.markdown(
-                "- Define attributes needed for this material type (specs, commercial, stock, QA)\n"
+                "- Define specs, commercial fields, stock fields, and QA needs for this material type\n"
                 "- **Receive / Issue / Transfer / Adjust**"
             )
 
-    # Quick switcher back to Paper Reel
     if st.button("🔁 Switch to Paper Reel"):
         st.session_state.rm_type_selector = "Paper Reel"
         st.rerun()
