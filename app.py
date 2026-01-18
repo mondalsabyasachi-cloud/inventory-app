@@ -232,6 +232,7 @@ init_db()
 # Utilities
 # -------------------------
 def cm_to_inch(cm: Optional[float]) -> Optional[float]:
+    """Convert centimeters to inches (3 decimal places)."""
     if cm is None:
         return None
     try:
@@ -980,4 +981,3 @@ elif page == "Finished Goods":
     show_fg()
 else:
     show_settings()
-``
