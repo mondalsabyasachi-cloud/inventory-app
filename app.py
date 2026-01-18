@@ -143,7 +143,7 @@ def init_db():
         cur.execute("""
             CREATE TABLE IF NOT EXISTS PaperReel(
               ReelId INTEGER PRIMARY KEY AUTOINCREMENT,
-              SLNo TEXT,
+              SLNo INTEGER,
               ReelNo TEXT UNIQUE NOT NULL,
               SupplierId INTEGER,
               MakerId INTEGER,
