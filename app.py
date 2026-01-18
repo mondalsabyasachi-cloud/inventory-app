@@ -665,6 +665,22 @@ def show_raw_materials():
     tabs = st.tabs(["📃 Paper Reels (Grid)", "📥 Receive", "📤 Issue", "🔁 Transfer/Adjust"])
     t1, t2, t3, t4 = tabs
 
+    
+    # --- Raw Material Type selector (affects what we show below) ---
+    st.markdown("#### Select Raw Material Type")
+    rm_type = st.selectbox("Raw Material Type", RM_TYPES, index=0, key="rm_type_selector")
+    st.caption("Tip: Choose **Paper Reel** to access the full reel grid and receive/issue/transfer flows.")
+
+    # If not Paper Reel, show a friendly placeholder and short-circuit the page
+    if rm_type != "Paper Reel":
+        st.info(f"‘{rm_type}’ tracking is on the roadmap. For now, use **Paper Reel** to explore the full flows.")
+        c_go = st.button("🔁 Switch to Paper Reel", use_container_width=False)
+        if c_go:
+            st.session_state.rm_type_selector = "Paper Reel"
+            st.rerun()
+        # You can put lightweight grids/forms for each RM type here later.
+        return
+
     with t1:
         st.caption("Tip: Use column filters and the inbuilt download to export.")
         df = fetch_reel_grid()
