@@ -297,6 +297,189 @@ def compute_reel_closing(conn, reel_id: int) -> Tuple[float, float]:
 
 
 # =========================
+# Paper Reels: Edit/Delete helpers
+# =========================
+
+# columns that we allow to be edited in-bulk (left = grid column, right = DB field)
+PAPER_EDITABLE_MAP = {
+    "SL No.": "SLNo",
+    "Material Rcv Dt.": "ReceiveDate",
+    "Maker's/Supplier's Inv Dt.": "SupplierInvDate",
+    "Deckle in cm": "DeckleCm",
+    "GSM": "GSM",
+    "BF": "BF",
+    "Paper Shade": "Shade",
+    "Opening Stk Till Date": "OpeningKg",
+    "Weight (Kg)": "WeightKg",
+    "Consume Dt": "LastConsumeDate",
+    "Consumption Entry Date": "ConsumptionEntryDate",
+    "Reel Shifting Date": "ReelShiftDate",
+    "Delivery Challan No.": "DeliveryChallanNo",
+    "Reorder Level": "ReorderLevelKg",
+    "Paper Rate/Kg": "PaperRatePerKg",
+    "Transport Rate/Kg": "TransportRatePerKg",
+    "Basic Landed Cost/Kg": "BasicLandedCostPerKg",
+    "Remarks": "Remarks",
+}
+
+PAPER_EDIT_COLUMNS_ORDER = [
+    "Select",               # for bulk delete
+    "Reel No",              # primary key (not editable)
+    "SL No.",
+    "Material Rcv Dt.",
+    "Maker's/Supplier's Inv Dt.",
+    "Deckle in cm",
+    "Deckle in Inch",       # computed, not editable
+    "GSM",
+    "BF",
+    "Paper Shade",
+    "Opening Stk Till Date",
+    "Weight (Kg)",
+    "Consume Dt",
+    "Consumption Entry Date",
+    "Reel Shifting Date",
+    "Delivery Challan No.",
+    "Reorder Level",
+    "Paper Rate/Kg",
+    "Transport Rate/Kg",
+    "Basic Landed Cost/Kg",
+    "Remarks",
+]
+
+def _norm_date(val):
+    """Normalize a UI value into ISO 'YYYY-MM-DD' or None for DB."""
+    import pandas as pd
+    from datetime import date, datetime
+    if val is None or val == "" or (isinstance(val, float) and pd.isna(val)):
+        return None
+    # Streamlit returns pd.Timestamp for date columns; accept strings too
+    try:
+        if isinstance(val, (date, datetime)):
+            return val.date().isoformat() if isinstance(val, datetime) else val.isoformat()
+        ts = pd.to_datetime(val, errors="coerce")
+        if ts is pd.NaT:
+            return None
+        return ts.date().isoformat()
+    except Exception:
+        return None
+
+def build_paper_edit_df(calc_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Take the computed grid (calc_df) and return a smaller, ordered dataframe for editing.
+    """
+    if calc_df.empty:
+        # build an empty frame with the correct columns
+        return pd.DataFrame(columns=PAPER_EDIT_COLUMNS_ORDER)
+
+    # Ensure necessary columns exist
+    df = calc_df.copy()
+
+    # Deckle in Inch always mirrors Deckle in cm (3 decimals)
+    if "Deckle in cm" in df.columns:
+        df["Deckle in Inch"] = (pd.to_numeric(df["Deckle in cm"], errors="coerce") / 2.54).round(3)
+
+    # Some grids use slightly different labels; align if needed
+    if "Opening Stk Till Date (Kg)" in df.columns and "Opening Stk Till Date" not in df.columns:
+        df = df.rename(columns={"Opening Stk Till Date (Kg)": "Opening Stk Till Date"})
+
+    # Create the edit frame with a 'Select' column for deletion
+    edit_df = pd.DataFrame()
+    edit_df["Select"] = False
+    for col in PAPER_EDIT_COLUMNS_ORDER:
+        if col in ["Select"]:
+            continue
+        if col in df.columns:
+            edit_df[col] = df[col]
+        else:
+            edit_df[col] = None
+
+    # Keep only the columns in the desired order
+    edit_df = edit_df[[c for c in PAPER_EDIT_COLUMNS_ORDER]]
+    return edit_df
+
+def _coerce_value(db_field: str, ui_value):
+    """Type-safe coercion for numeric/date/text fields before DB UPDATE."""
+    numeric_fields = {"DeckleCm","GSM","BF","OpeningKg","WeightKg","ReorderLevelKg","PaperRatePerKg","TransportRatePerKg","BasicLandedCostPerKg"}
+    date_fields    = {"ReceiveDate","SupplierInvDate","LastConsumeDate","ConsumptionEntryDate","ReelShiftDate"}
+    if db_field in numeric_fields:
+        try:
+            return float(ui_value) if ui_value not in (None, "") else None
+        except Exception:
+            return None
+    if db_field in date_fields:
+        return _norm_date(ui_value)
+    # text
+    return None if ui_value in (None, "") else str(ui_value)
+
+def save_paper_edits(orig_df: pd.DataFrame, edited_df: pd.DataFrame) -> int:
+    """
+    Diff original vs edited, and persist updates to DB.
+    Returns number of rows updated.
+    """
+    if edited_df is None or edited_df.empty:
+        return 0
+
+    # Index by Reel No for easy matching
+    o = orig_df.set_index("Reel No", drop=False)
+    e = edited_df.set_index("Reel No", drop=False)
+
+    changed_rows = 0
+    with get_conn() as conn:
+        cur = conn.cursor()
+        for reel_no, row in e.iterrows():
+            if reel_no not in o.index:
+                continue
+            updates = []
+            params  = []
+            for ui_col, db_field in PAPER_EDITABLE_MAP.items():
+                if ui_col not in e.columns or ui_col not in o.columns:
+                    continue
+                old_val = o.loc[reel_no, ui_col]
+                new_val = row[ui_col]
+                # Normalize dates for compare
+                if db_field in {"ReceiveDate","SupplierInvDate","LastConsumeDate","ConsumptionEntryDate","ReelShiftDate"}:
+                    old_norm = _norm_date(old_val)
+                    new_norm = _norm_date(new_val)
+                    is_changed = (old_norm != new_norm)
+                    new_val_final = new_norm
+                else:
+                    # compare stringified values to avoid float quirks
+                    is_changed = (str(old_val) != str(new_val))
+                    new_val_final = _coerce_value(db_field, new_val)
+
+                if is_changed:
+                    updates.append(f"{db_field}=?")
+                    params.append(new_val_final)
+
+            if updates:
+                params.append(reel_no)
+                cur.execute(f"UPDATE PaperReel SET {', '.join(updates)} WHERE ReelNo=?", params)
+                changed_rows += 1
+    return changed_rows
+
+def delete_paper_rows(edited_df: pd.DataFrame) -> int:
+    """Delete rows where 'Select' == True (also cleans RM_Movement)."""
+    if edited_df is None or edited_df.empty or "Select" not in edited_df.columns:
+        return 0
+    selected = edited_df[edited_df["Select"] == True]  # noqa: E712
+    if selected.empty: 
+        return 0
+    reel_nos = selected["Reel No"].dropna().astype(str).tolist()
+    deleted = 0
+    with get_conn() as conn:
+        cur = conn.cursor()
+        for rn in reel_nos:
+            cur.execute("SELECT ReelId FROM PaperReel WHERE ReelNo=?", (rn,))
+            r = cur.fetchone()
+            if not r:
+                continue
+            rid = int(r[0])
+            cur.execute("DELETE FROM RM_Movement WHERE ReelId=?", (rid,))
+            cur.execute("DELETE FROM PaperReel   WHERE ReelId=?", (rid,))
+            deleted += 1
+    return deleted
+
+# =========================
 # Paper Reels: helpers
 # =========================
 
@@ -1049,6 +1232,67 @@ def show_raw_materials():
                 use_container_width=True,
                 hide_index=True
             )
+
+        
+        # ---------- Single/Bulk Edit + Bulk Delete ----------
+        with st.expander("✏️ Edit / Delete rows (single or bulk)", expanded=False):
+            # Prepare editable dataframe using current computed grid
+            base_df = fetch_reel_grid()
+            calc_df = build_paper_grid_with_calcs(base_df)
+            edit_df = build_paper_edit_df(calc_df)
+
+            # Initialize session state baselines (for diffing)
+            if "paper_edit_orig" not in st.session_state:
+                st.session_state.paper_edit_orig = edit_df.copy()
+            if "paper_edit_df" not in st.session_state:
+                st.session_state.paper_edit_df = edit_df.copy()
+
+            st.caption("Tip: Edit values inline. Tick **Select** to mark rows for deletion.")
+
+            edited = st.data_editor(
+                st.session_state.paper_edit_df,
+                use_container_width=True,
+                num_rows="fixed",          # no add-rows from here
+                key="paper_editor",
+                column_config={
+                    "Select": st.column_config.CheckboxColumn(help="Tick to mark this row for deletion."),
+                    "Reel No": st.column_config.TextColumn(disabled=True, help="Primary key; not editable."),
+                    "Deckle in Inch": st.column_config.NumberColumn(disabled=True, help="Auto from Deckle in cm."),
+                    "Material Rcv Dt.": st.column_config.DateColumn(format="YYYY-MM-DD"),
+                    "Maker's/Supplier's Inv Dt.": st.column_config.DateColumn(format="YYYY-MM-DD"),
+                    "Consume Dt": st.column_config.DateColumn(format="YYYY-MM-DD"),
+                    "Consumption Entry Date": st.column_config.DateColumn(format="YYYY-MM-DD"),
+                    "Reel Shifting Date": st.column_config.DateColumn(format="YYYY-MM-DD"),
+                },
+            )
+
+            # Keep latest edits in session
+            st.session_state.paper_edit_df = edited
+
+            c1, c2, c3 = st.columns([1,1,2])
+            with c1:
+                if st.button("💾 Save changes", type="primary", use_container_width=True):
+                    n = save_paper_edits(st.session_state.paper_edit_orig, st.session_state.paper_edit_df)
+                    st.success(f"Saved {n} row(s).")
+                    # reset baselines and reload
+                    st.session_state.pop("paper_edit_orig", None)
+                    st.session_state.pop("paper_edit_df",   None)
+                    st.rerun()
+            with c2:
+                if st.button("🗑 Delete selected", type="secondary", use_container_width=True):
+                    n = delete_paper_rows(st.session_state.paper_edit_df)
+                    if n > 0:
+                        st.warning(f"Deleted {n} row(s).")
+                    else:
+                        st.info("No rows selected for deletion.")
+                    st.session_state.pop("paper_edit_orig", None)
+                    st.session_state.pop("paper_edit_df",   None)
+                    st.rerun()
+            with c3:
+                if st.button("↻ Reload table", use_container_width=True):
+                    st.session_state.pop("paper_edit_orig", None)
+                    st.session_state.pop("paper_edit_df",   None)
+                    st.rerun()
 
         # Upload Excel expander
         with st.expander("⬆ Upload Paper Reels from Excel (.xlsx)", expanded=False):
