@@ -30,6 +30,18 @@ ACCENT_WIP = "#f4a261"
 ACCENT_FG = "#2a9d8f"
 CARD_BG = "#ffffff"
 
+# Raw Material type master list (controls the drop-down in Raw Materials page)
+RM_TYPES = [
+    "Paper Reel",
+    "GUM / Adhesives",
+    "Stitching Wire",
+    "Strapping Wire",
+    "Board / Sheet",
+    "Ink / Chemicals",
+    "Packaging Accessories",
+    "Others"
+]
+
 st.markdown(f"""
 <style>
     .metric-card {{
