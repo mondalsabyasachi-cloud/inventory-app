@@ -1,16 +1,7 @@
 
 # ------------------------------------------------------------
 # Packsmart Inventory App (RM / WIP / FG) - Streamlit (single file)
-# Author: Prepared for Saby Mondal | Packsmart India Pvt Ltd
-# ------------------------------------------------------------
-# Modules:
-# - Sidebar navigation with immediate refresh (st.session_state + st.rerun)
-# - Dashboard (KPIs)
-# - Raw Materials: Paper Reels grid + Receive/Issue/Transfer/Adjust
-# - Work In Process: WO creation, scan-in/out through steps
-# - Finished Goods: Instant Answer (Customer+SKU), Pack/Putaway, Reserve & Dispatch
-# - Settings: Masters and Demo Data Seeding
-# - SQLite persistence (inventory.db) for easy local trials
+# Prepared for: Saby Mondal | Packsmart India Pvt Ltd
 # ------------------------------------------------------------
 
 import os
@@ -23,7 +14,6 @@ from typing import Optional, Tuple, Dict
 import pandas as pd
 import streamlit as st
 
-
 # -------------------------
 # Page config & theme
 # -------------------------
@@ -34,10 +24,10 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-PRIMARY = "#2b6cb0"          # blue
-ACCENT_RM = "#e76f51"         # raw material tile color
-ACCENT_WIP = "#f4a261"        # WIP tile color
-ACCENT_FG = "#2a9d8f"         # finished goods tile color
+PRIMARY = "#2b6cb0"
+ACCENT_RM = "#e76f51"
+ACCENT_WIP = "#f4a261"
+ACCENT_FG = "#2a9d8f"
 CARD_BG = "#ffffff"
 
 st.markdown(f"""
@@ -55,10 +45,8 @@ st.markdown(f"""
     .metric-sub {{ font-size: 0.8rem; color: #6b7280; }}
     .stTabs [data-baseweb="tab-list"] {{ gap: 8px; }}
     .stTabs [data-baseweb="tab"] {{ padding-top: 8px; padding-bottom: 8px; }}
-    .small-note {{ color:#6b7280; font-size:0.85rem; }}
 </style>
 """, unsafe_allow_html=True)
-
 
 # -------------------------
 # DB helpers
@@ -124,7 +112,7 @@ def init_db():
             )
         """)
 
-        # Raw Material: Paper Reels (your full field set)
+        # Raw Material: Paper Reels
         cur.execute("""
             CREATE TABLE IF NOT EXISTS PaperReel(
               ReelId INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -164,7 +152,7 @@ def init_db():
               MoveId INTEGER PRIMARY KEY AUTOINCREMENT,
               ReelId INTEGER NOT NULL,
               DateTime TEXT NOT NULL,
-              Type TEXT NOT NULL,            -- Receive/Issue/Return/TransferIn/TransferOut/Adjust/Hold/Release/Scrap
+              Type TEXT NOT NULL,  -- Receive/Issue/Return/TransferIn/TransferOut/Adjust/Hold/Release/Scrap
               QtyKg REAL DEFAULT 0,
               FromBinId INTEGER,
               ToBinId INTEGER,
@@ -192,7 +180,7 @@ def init_db():
             CREATE TABLE IF NOT EXISTS WIP_Unit(
               UnitId INTEGER PRIMARY KEY AUTOINCREMENT,
               WOId INTEGER NOT NULL,
-              Step TEXT NOT NULL,            -- Corrugation/PrinterSlotter/DieCutter/FolderGluer/Stitcher/Bundling/QA
+              Step TEXT NOT NULL,  -- Corrugation/PrinterSlotter/DieCutter/FolderGluer/Stitcher/Bundling/QA
               Workcenter TEXT,
               PalletId TEXT,
               Qty REAL NOT NULL,
@@ -226,7 +214,7 @@ def init_db():
               MoveId INTEGER PRIMARY KEY AUTOINCREMENT,
               PalletId TEXT NOT NULL,
               DateTime TEXT NOT NULL,
-              Type TEXT NOT NULL,            -- Pack/Putaway/Reserve/Unreserve/Pick/Dispatch/Hold/Adjust
+              Type TEXT NOT NULL,  -- Pack/Putaway/Reserve/Unreserve/Pick/Dispatch/Hold/Adjust
               Qty REAL NOT NULL,
               FromBinId INTEGER,
               ToBinId INTEGER,
@@ -236,7 +224,6 @@ def init_db():
         """)
 
 init_db()
-
 
 # -------------------------
 # Utilities
@@ -263,7 +250,8 @@ def compute_reel_closing(conn, reel_id: int) -> Tuple[float, float]:
         GROUP BY Type
     """, conn, params=[reel_id])
     q: Dict[str, float] = df.set_index("Type")["Qty"].to_dict() if len(df) else {}
-    opening_row = pd.read_sql_query("SELECT OpeningKg FROM PaperReel WHERE ReelId=?", conn, params=[reel_id]).iloc[0]
+    opening_row = pd.read_sql_query("SELECT OpeningKg FROM PaperReel WHERE ReelId=?",
+                                    conn, params=[reel_id]).iloc[0]
     opening = float(opening_row["OpeningKg"] or 0)
 
     receipts = q.get("Receive", 0.0)
@@ -271,15 +259,14 @@ def compute_reel_closing(conn, reel_id: int) -> Tuple[float, float]:
     scrap = q.get("Scrap", 0.0)
     trans_out = q.get("TransferOut", 0.0)
     trans_in = q.get("TransferIn", 0.0)
-    adjust = q.get("Adjust", 0.0)  # signed (+/-)
+    adjust = q.get("Adjust", 0.0)
 
     consumed = issues + scrap
     closing = opening + receipts - (issues + scrap + trans_out) + trans_in + adjust
     return (round(consumed, 3), round(closing, 3))
 
-
 # -------------------------
-# Seed demo data (idempotent)
+# Demo Data
 # -------------------------
 def seed_demo_data():
     with get_conn() as conn:
@@ -288,12 +275,16 @@ def seed_demo_data():
         # Masters
         for c in ["Customer X", "Customer Y"]:
             cur.execute("INSERT OR IGNORE INTO Customer(Name) VALUES(?)", (c,))
-        cur.execute("INSERT OR IGNORE INTO SKU(SKUCode, Description) VALUES(?,?)", ("Product-1", "Printed RSC 5Ply"))
-        cur.execute("INSERT OR IGNORE INTO SKU(SKUCode, Description) VALUES(?,?)", ("Product-2", "Die-cut Auto Bottom"))
+        cur.execute("INSERT OR IGNORE INTO SKU(SKUCode, Description) VALUES(?,?)",
+                    ("Product-1", "Printed RSC 5Ply"))
+        cur.execute("INSERT OR IGNORE INTO SKU(SKUCode, Description) VALUES(?,?)",
+                    ("Product-2", "Die-cut Auto Bottom"))
 
         for w in ["Main WH", "FG WH"]:
             cur.execute("INSERT OR IGNORE INTO Warehouse(Name) VALUES(?)", (w,))
-        wh_map = {r["Name"]: r["WarehouseId"] for r in cur.execute("SELECT WarehouseId, Name FROM Warehouse")}
+
+        wh_map = {r["Name"]: r["WarehouseId"]
+                  for r in cur.execute("SELECT WarehouseId, Name FROM Warehouse")}
         bins = [
             (wh_map["Main WH"], "A", "1", "01"),
             (wh_map["Main WH"], "A", "1", "02"),
@@ -309,12 +300,10 @@ def seed_demo_data():
             cur.execute("INSERT OR IGNORE INTO Maker(Name) VALUES(?)", (m,))
 
         # Sample reels
-        cur.execute("SELECT BinId FROM Bin WHERE BinId IS NOT NULL LIMIT 1")
-        sample_bin = cur.fetchone()[0]
+        cur.execute("SELECT BinId FROM Bin LIMIT 1"); sample_bin = cur.fetchone()[0]
         cur.execute("SELECT SupplierId FROM Supplier WHERE Name='KraftCo'"); sup = cur.fetchone()[0]
         cur.execute("SELECT MakerId FROM Maker WHERE Name='JK Papers'"); mk = cur.fetchone()[0]
 
-        # Reel-1001
         cur.execute("""
             INSERT OR IGNORE INTO PaperReel(
                 SLNo, ReelNo, SupplierId, MakerId, ReceiveDate, SupplierInvDate,
@@ -326,11 +315,11 @@ def seed_demo_data():
         """, ("1", "Reel-1001", sup, mk, (date.today()-relativedelta(days=5)).isoformat(),
               (date.today()-relativedelta(days=5)).isoformat(), 180.0, 150, 22, "Natural",
               0.0, 1200.0, sample_bin, 1, 1, "DC-8891", 300.0, 45.0, 2.5, 47.5, "Demo reel"))
+
         cur.execute("SELECT ReelId FROM PaperReel WHERE ReelNo='Reel-1001'"); rid1 = cur.fetchone()[0]
         cur.execute("INSERT OR IGNORE INTO RM_Movement(ReelId, DateTime, Type, QtyKg) VALUES(?,?,?,?)",
                     (rid1, datetime.now().isoformat(), "Receive", 1200.0))
 
-        # Reel-1002
         cur.execute("""
             INSERT OR IGNORE INTO PaperReel(
                 SLNo, ReelNo, SupplierId, MakerId, ReceiveDate, SupplierInvDate,
@@ -354,45 +343,40 @@ def seed_demo_data():
         for pid, qty in [("PAL-001", 4000), ("PAL-002", 8480)]:
             cur.execute("""
                 INSERT OR IGNORE INTO FG_Pallet(PalletId, SKUId, CustomerId, Batch, PackDate,
-                    WarehouseId, BinId, OnHandQty, ReservedQty, HoldQty)
+                                                WarehouseId, BinId, OnHandQty, ReservedQty, HoldQty)
                 VALUES(?,?,?,?,?,?,?,?,?,?)
-            """, (pid, sku1, cx, "BATCH-A", date.today().isoformat(), fgwh, fgbin, qty, 0, 0))
+            """, (pid, sku1, cx, "BATCH-A", today_str(), fgwh, fgbin, qty, 0, 0))
 
     st.success("Demo data seeded.")
 
-
 # -------------------------
-# Sidebar (robust refresh)
+# Navigation (single source of truth)
 # -------------------------
 PAGES = ["Dashboard", "Raw Materials", "WIP Items", "Finished Goods", "Settings"]
 
-def _on_nav_change():
-    st.session_state["_page"] = st.session_state["_nav"]
-    st.rerun()
-
-# Initialize state once
 if "_page" not in st.session_state:
     st.session_state["_page"] = "Dashboard"
-if "_nav" not in st.session_state:
-    st.session_state["_nav"] = st.session_state["_page"]
 
 with st.sidebar:
     st.markdown("### 🧃 Packsmart India Pvt Ltd\n**Inventory System**")
-    st.radio(
+    nav_choice = st.radio(
         "Go to",
         PAGES,
-        index=PAGES.index(st.session_state["_nav"]),
-        key="_nav",
-        on_change=_on_nav_change,
+        index=PAGES.index(st.session_state["_page"]),
         label_visibility="collapsed",
         captions=[
             "Overview KPIs", "Paper, Boards, GUM etc.", "In-process tracking",
             "FG stock & dispatch", "Masters & demo"
-        ]
+        ],
+        key="left_nav"
     )
+    # If the radio changed, update page and rerun
+    if nav_choice != st.session_state["_page"]:
+        st.session_state["_page"] = nav_choice
+        st.rerun()
+
     st.markdown("---")
     st.caption("Logged in as: Stores/Planning")
-
 
 # -------------------------
 # Dashboard
@@ -400,13 +384,13 @@ with st.sidebar:
 def show_dashboard():
     col1, col2, col3 = st.columns(3)
     with get_conn() as conn:
-        # RM summary (Paper only for demo)
+        # RM summary
         rids = pd.read_sql_query("SELECT ReelId FROM PaperReel", conn)
         total_rm_kg = 0.0
-        total_reels = len(rids)
         for _, r in rids.iterrows():
             _, closing = compute_reel_closing(conn, int(r["ReelId"]))
             total_rm_kg += closing
+        total_reels = len(rids)
 
         # WIP summary
         wip_qty = pd.read_sql_query(
@@ -422,8 +406,7 @@ def show_dashboard():
                    COUNT(*) AS Pallets
             FROM FG_Pallet
         """, conn).iloc[0]
-        fg_atp = int(fg["ATP"])
-        fg_pallets = int(fg["Pallets"])
+        fg_atp, fg_pallets = int(fg["ATP"]), int(fg["Pallets"])
 
     with col1:
         st.markdown(f"""
@@ -453,15 +436,14 @@ def show_dashboard():
         st.subheader("➕ Add Inventory")
         st.caption("Use **Raw Materials** or **Finished Goods** pages for detailed operations.")
         if st.button("Go to Raw Materials", use_container_width=True, type="primary"):
-            st.session_state["_nav"] = "Raw Materials"
-            _on_nav_change()
+            st.session_state["_page"] = "Raw Materials"
+            st.rerun()
     with c2:
         st.subheader("🔎 View Inventory")
         st.caption("Filter and drill down in each module (RM / WIP / FG).")
         if st.button("Go to Finished Goods", use_container_width=True):
-            st.session_state["_nav"] = "Finished Goods"
-            _on_nav_change()
-
+            st.session_state["_page"] = "Finished Goods"
+            st.rerun()
 
 # -------------------------
 # Raw Materials (Paper Reels)
@@ -642,7 +624,6 @@ def rm_transfer_adjust_form():
             rid = rmap[chosen]
             if action == "Transfer":
                 to_bin = int(bins[bins["Label"] == bin_label]["BinId"].iloc[0])
-                # add two movements for clarity
                 cur.execute("INSERT INTO RM_Movement(ReelId, DateTime, Type, QtyKg, ToBinId, RefDocNo) VALUES(?,?,?,?,?,?)",
                             (rid, datetime.now().isoformat(), "TransferIn", 0.0, to_bin, refdoc))
                 cur.execute("UPDATE PaperReel SET ReelLocationBinId=?, ReelShiftDate=? WHERE ReelId=?",
@@ -664,7 +645,6 @@ def show_raw_materials():
         st.caption("Tip: Use column filters and the inbuilt download to export.")
         df = fetch_reel_grid()
 
-        # Highlight rows below reorder
         def highlight_reorder(row):
             try:
                 if float(row["Closing Stock till date"]) <= float(row["Reorder Level"]):
@@ -678,13 +658,13 @@ def show_raw_materials():
             use_container_width=True,
             hide_index=True
         )
+
     with tabs[1]:
         rm_receive_form()
     with tabs[2]:
         rm_issue_form()
     with tabs[3]:
         rm_transfer_adjust_form()
-
 
 # -------------------------
 # WIP
@@ -766,7 +746,6 @@ def show_wip():
                          (status_out, datetime.now().isoformat(), int(unit_id)))
         st.success("WIP scanned-out.")
 
-
 # -------------------------
 # Finished Goods
 # -------------------------
@@ -815,12 +794,11 @@ def fg_pack_form():
             cur.execute("SELECT SKUId FROM SKU WHERE SKUCode=?", (sku,)); sku_id = cur.fetchone()[0]
             cur.execute("SELECT CustomerId FROM Customer WHERE Name=?", (customer,)); cust_id = cur.fetchone()[0]
             to_bin = int(bins[bins["Label"] == bin_label]["BinId"].iloc[0])
-            # Obtain WH from selected bin
             cur.execute("SELECT WarehouseId FROM Bin WHERE BinId=?", (to_bin,)); wh_id = cur.fetchone()[0]
             cur.execute("""
                 INSERT INTO FG_Pallet(PalletId, SKUId, CustomerId, Batch, PackDate, WarehouseId, BinId, OnHandQty)
                 VALUES(?,?,?,?,?,?,?,?)
-            """, (pallet_id, sku_id, cust_id, batch, date.today().isoformat(), wh_id, to_bin, qty))
+            """, (pallet_id, sku_id, cust_id, batch, today_str(), wh_id, to_bin, qty))
             cur.execute("""
                 INSERT INTO FG_Movement(PalletId, DateTime, Type, Qty, ToBinId, RefDoc)
                 VALUES(?,?,?,?,?,?)
@@ -910,7 +888,6 @@ def show_fg():
             """, conn)
         st.dataframe(inv, use_container_width=True, hide_index=True)
 
-
 # -------------------------
 # Settings (masters + demo)
 # -------------------------
@@ -926,7 +903,8 @@ def show_settings():
         if st.button("Add Customer"):
             if cust.strip():
                 with get_conn() as conn:
-                    conn.execute("INSERT OR IGNORE INTO Customer(Name, GSTIN) VALUES(?,?)", (cust.strip(), gstin.strip()))
+                    conn.execute("INSERT OR IGNORE INTO Customer(Name, GSTIN) VALUES(?,?)",
+                                 (cust.strip(), gstin.strip()))
                 st.success("Customer saved.")
             else:
                 st.warning("Customer name required.")
@@ -938,7 +916,8 @@ def show_settings():
         if st.button("Add SKU"):
             if sku.strip():
                 with get_conn() as conn:
-                    conn.execute("INSERT OR IGNORE INTO SKU(SKUCode, Description) VALUES(?,?)", (sku.strip(), sdesc.strip()))
+                    conn.execute("INSERT OR IGNORE INTO SKU(SKUCode, Description) VALUES(?,?)",
+                                 (sku.strip(), sdesc.strip()))
                 st.success("SKU saved.")
             else:
                 st.warning("SKU Code required.")
@@ -977,9 +956,8 @@ def show_settings():
     if st.button("Seed Demo Data", type="primary"):
         seed_demo_data()
 
-
 # -------------------------
-# Router (single source of truth)
+# Router
 # -------------------------
 page = st.session_state.get("_page", "Dashboard")
 
