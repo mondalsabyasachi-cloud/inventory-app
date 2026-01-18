@@ -143,7 +143,7 @@ def init_db():
         cur.execute("""
             CREATE TABLE IF NOT EXISTS PaperReel(
               ReelId INTEGER PRIMARY KEY AUTOINCREMENT,
-              SLNo INTEGER,
+              SLNo TEXT,
               ReelNo TEXT UNIQUE NOT NULL,
               SupplierId INTEGER,
               MakerId INTEGER,
@@ -338,41 +338,6 @@ COLUMN_GROUPS = {
     "Target Customer": "Planning Hooks",
     "Reel Shifting Date": "Planning Hooks",
 }
-
-
-def get_next_slno(conn) -> int:
-    """
-    Returns the next sequential SLNo (MAX(SLNo)+1). Starts at 1 if table is empty.
-    Works whether SLNo is INTEGER or TEXT containing digits.
-    """
-    cur = conn.cursor()
-    cur.execute("SELECT MAX(CAST(SLNo AS INTEGER)) FROM PaperReel")
-    r = cur.fetchone()
-    if r and r[0] is not None:
-        return int(r[0]) + 1
-    return 1
-
-
-def resequence_slno():
-    """
-    Reassign SLNo as perfect sequence: 1..N ordered by current SLNo (then ReelId).
-    Call this after deletes, imports, and rollbacks.
-    """
-    with get_conn() as conn:
-        cur = conn.cursor()
-        # Order deterministically
-        cur.execute("""
-            SELECT ReelId
-            FROM PaperReel
-            ORDER BY CAST(SLNo AS INTEGER) ASC, ReelId ASC
-        """)
-        rows = cur.fetchall()
-
-        n = 1
-        for row in rows:
-            cur.execute("UPDATE PaperReel SET SLNo=? WHERE ReelId=?", (n, row["ReelId"]))
-            n += 1
-
 
 def group_columns_multiindex(df: pd.DataFrame) -> pd.DataFrame:
     """Apply MultiIndex columns using COLUMN_GROUPS as the top level."""
@@ -1006,7 +971,7 @@ def rm_receive_form():
         """, conn)
     c1, c2, c3 = st.columns(3)
     with c1:
-       
+        sl = st.text_input("SL No.")
         reelno = st.text_input("Reel No*", placeholder="e.g., Reel-1050")
         supplier = st.selectbox("Reel Supplier*", options=suppliers)
         maker = st.selectbox("Reel Maker*", options=makers)
@@ -1032,42 +997,29 @@ def rm_receive_form():
     with c6:
         landed = st.number_input("Basic Landed Cost/Kg (INR)", min_value=0.0, value=47.5, step=0.1)
     remarks = st.text_area("Remarks")
-    
-if st.button("Receive Reel", type="primary", use_container_width=True):
-    with get_conn() as conn:
-        cur = conn.cursor()
-        # Resolve FKs and bin
-        cur.execute("SELECT SupplierId FROM Supplier WHERE Name=?", (supplier,))
-        supplier_id = cur.fetchone()[0]
-        cur.execute("SELECT MakerId FROM Maker WHERE Name=?", (maker,))
-        maker_id = cur.fetchone()[0]
-        sel_bin = int(bins[bins["Label"] == bin_label]["BinId"].iloc[0])
-
-        # ✅ Auto-generate next SL No. here
-        sl = get_next_slno(conn)
-
-        # Insert the reel
-        cur.execute("""
-            INSERT INTO PaperReel(
-                SLNo, ReelNo, SupplierId, MakerId, ReceiveDate, SupplierInvDate,
-                DeckleCm, GSM, BF, Shade, OpeningKg, WeightKg, ReelLocationBinId,
-                DeliveryChallanNo, ReorderLevelKg, PaperRatePerKg, TransportRatePerKg,
-                BasicLandedCostPerKg, Remarks
-            ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-        """, (sl, reelno, supplier_id, maker_id, rcv_dt.isoformat(), inv_dt.isoformat(),
-              deckle_cm, gsm, bf, shade, opening, weight, sel_bin,
-              dc_no, reorder, paper_rate, transport_rate, landed, remarks))
-
-        # Movement
-        cur.execute("SELECT ReelId FROM PaperReel WHERE ReelNo=?", (reelno,))
-        new_id = cur.fetchone()[0]
-        cur.execute("""
-            INSERT INTO RM_Movement(ReelId, DateTime, Type, QtyKg, ToBinId, RefDocType, RefDocNo)
-            VALUES(?,?,?,?,?,?,?)
-        """, (new_id, datetime.now().isoformat(), "Receive", weight, sel_bin, "DC", dc_no))
-
-    st.success(f"Reel **{reelno}** received and stored.")
-
+    if st.button("Receive Reel", type="primary", use_container_width=True):
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT SupplierId FROM Supplier WHERE Name=?", (supplier,)); supplier_id = cur.fetchone()[0]
+            cur.execute("SELECT MakerId FROM Maker WHERE Name=?", (maker,)); maker_id = cur.fetchone()[0]
+            sel_bin = int(bins[bins["Label"] == bin_label]["BinId"].iloc[0])
+            cur.execute("""
+                INSERT INTO PaperReel(
+                    SLNo, ReelNo, SupplierId, MakerId, ReceiveDate, SupplierInvDate,
+                    DeckleCm, GSM, BF, Shade, OpeningKg, WeightKg, ReelLocationBinId,
+                    DeliveryChallanNo, ReorderLevelKg, PaperRatePerKg, TransportRatePerKg,
+                    BasicLandedCostPerKg, Remarks
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """, (sl, reelno, supplier_id, maker_id, rcv_dt.isoformat(), inv_dt.isoformat(),
+                  deckle_cm, gsm, bf, shade, opening, weight, sel_bin,
+                  dc_no, reorder, paper_rate, transport_rate, landed, remarks))
+            cur.execute("SELECT ReelId FROM PaperReel WHERE ReelNo=?", (reelno,))
+            new_id = cur.fetchone()[0]
+            cur.execute("""
+                INSERT INTO RM_Movement(ReelId, DateTime, Type, QtyKg, ToBinId, RefDocType, RefDocNo)
+                VALUES(?,?,?,?,?,?,?)
+            """, (new_id, datetime.now().isoformat(), "Receive", weight, sel_bin, "DC", dc_no))
+        st.success(f"Reel **{reelno}** received and stored.")
 
 def rm_issue_form():
     st.subheader("📤 Issue to Corrugation / Production")
