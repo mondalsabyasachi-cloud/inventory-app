@@ -14,7 +14,6 @@ from typing import Optional, Tuple, Dict
 import pandas as pd
 import streamlit as st
 
-
 # -------------------------
 # Page config & theme
 # -------------------------
@@ -49,6 +48,21 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
+# -------------------------
+# NAVIGATION: process any pending nav BEFORE rendering sidebar
+# -------------------------
+PAGES = ["Dashboard", "Raw Materials", "WIP Items", "Finished Goods", "Settings"]
+
+# Initialize left_nav once
+if "left_nav" not in st.session_state:
+    st.session_state.left_nav = "Dashboard"
+
+# If a button set a pending navigation in a previous run, apply it now
+if "_pending_nav" in st.session_state:
+    target = st.session_state.pop("_pending_nav")
+    if target in PAGES:
+        st.session_state.left_nav = target
+    st.rerun()
 
 # -------------------------
 # DB helpers
@@ -227,7 +241,6 @@ def init_db():
 
 init_db()
 
-
 # -------------------------
 # Utilities
 # -------------------------
@@ -268,7 +281,6 @@ def compute_reel_closing(conn, reel_id: int) -> Tuple[float, float]:
     consumed = issues + scrap
     closing = opening + receipts - (issues + scrap + trans_out) + trans_in + adjust
     return (round(consumed, 3), round(closing, 3))
-
 
 # -------------------------
 # Demo Data seeding
@@ -353,19 +365,12 @@ def seed_demo_data():
 
     st.success("Demo data seeded.")
 
-
 # -------------------------
-# Navigation (single source of truth)
+# Sidebar (radio is the single controller)
 # -------------------------
-PAGES = ["Dashboard", "Raw Materials", "WIP Items", "Finished Goods", "Settings"]
-
-# Initialize the radio's value once
-if "left_nav" not in st.session_state:
-    st.session_state.left_nav = "Dashboard"
-
 with st.sidebar:
     st.markdown("### 🧃 Packsmart India Pvt Ltd\n**Inventory System**")
-    nav_choice = st.radio(
+    st.radio(
         "Go to",
         PAGES,
         index=PAGES.index(st.session_state.left_nav),
@@ -381,7 +386,6 @@ with st.sidebar:
 
 # Always read the selected page from the radio key
 page = st.session_state.left_nav
-
 
 # -------------------------
 # Dashboard
@@ -441,15 +445,15 @@ def show_dashboard():
         st.subheader("➕ Add Inventory")
         st.caption("Use **Raw Materials** or **Finished Goods** pages for detailed operations.")
         if st.button("Go to Raw Materials", use_container_width=True, type="primary"):
-            st.session_state.left_nav = "Raw Materials"   # update radio
+            # Set pending nav and rerun; on next run the radio starts on the target page
+            st.session_state["_pending_nav"] = "Raw Materials"
             st.rerun()
     with c2:
         st.subheader("🔎 View Inventory")
         st.caption("Filter and drill down in each module (RM / WIP / FG).")
         if st.button("Go to Finished Goods", use_container_width=True):
-            st.session_state.left_nav = "Finished Goods"  # update radio
+            st.session_state["_pending_nav"] = "Finished Goods"
             st.rerun()
-
 
 # -------------------------
 # Raw Materials (Paper Reels)
@@ -674,7 +678,6 @@ def show_raw_materials():
     with t4:
         rm_transfer_adjust_form()
 
-
 # -------------------------
 # WIP
 # -------------------------
@@ -754,7 +757,6 @@ def show_wip():
             conn.execute("UPDATE WIP_Unit SET Status=?, OutTime=? WHERE UnitId=?",
                          (status_out, datetime.now().isoformat(), int(unit_id)))
         st.success("WIP scanned-out.")
-
 
 # -------------------------
 # Finished Goods
@@ -898,7 +900,6 @@ def show_fg():
             """, conn)
         st.dataframe(inv, use_container_width=True, hide_index=True)
 
-
 # -------------------------
 # Settings (masters + demo)
 # -------------------------
@@ -966,7 +967,6 @@ def show_settings():
     st.warning("**Demo Mode**: Inserts example customers, SKUs, bins, reels, and pallets.")
     if st.button("Seed Demo Data", type="primary"):
         seed_demo_data()
-
 
 # -------------------------
 # Router
