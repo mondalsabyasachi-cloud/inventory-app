@@ -471,64 +471,137 @@ def make_paper_template() -> tuple[bytes, str, str]:
         return (csv_bytes, "paper_reels_template.csv", "text/csv")
 
 
+# -------------------------
+# VALIDATION BEFORE IMPORT
+# -------------------------
+
+MANDATORY_COLUMNS = ["Reel No", "Weight (Kg)"]
+
+def validate_import_df(xdf: pd.DataFrame) -> pd.DataFrame:
+    """
+    Returns a DataFrame with:
+    - Valid (bool)
+    - Errors (str)
+    Does data-type & mandatory-field checks.
+    """
+    df = xdf.copy()
+
+    # Ensure all columns exist for preview
+    for col in PAPER_EXCEL_COLUMNS:
+        if col not in df.columns:
+            df[col] = None
+
+    val_flags = []
+    errors = []
+
+    for idx, row in df.iterrows():
+        row_errs = []
+
+        # Mandatory check
+        for c in MANDATORY_COLUMNS:
+            v = row.get(c, None)
+            if pd.isna(v) or (isinstance(v, str) and not v.strip()):
+                row_errs.append(f"{c} missing")
+
+        # Numeric fields
+        for c in ["Weight (Kg)", "Deckle in cm", "GSM", "BF",
+                  "Opening Stk Till Date (Kg)", "Reorder Level (Kg)",
+                  "Paper Rate/Kg", "Transport Rate/Kg", "Basic Landed Cost/Kg"]:
+            v = row.get(c, "")
+            if pd.notna(v) and str(v).strip() != "":
+                try:
+                    float(v)
+                except:
+                    row_errs.append(f"{c} not numeric")
+
+        # Date fields
+        for c in ["Material Rcv Dt.", "Maker's/Supplier's Inv Dt."]:
+            v = row.get(c, "")
+            if pd.notna(v) and str(v).strip() != "":
+                try:
+                    pd.to_datetime(v, errors="raise")
+                except:
+                    row_errs.append(f"{c} invalid")
+
+        ok = (len(row_errs) == 0)
+        val_flags.append(ok)
+        errors.append("; ".join(row_errs))
+
+    df["Valid"] = val_flags
+    df["Errors"] = errors
+    return df
+
 
 def rm_upload_excel_ui():
     st.subheader("⬆ Upload Paper Reels (Excel / CSV)")
-    st.caption("You can upload either a .xlsx (requires openpyxl on the server) or a .csv (no extra packages).")
+    st.caption("Preview → Validate → Import valid rows → Rollback supported")
 
-    # Offer a template (XLSX if possible, else CSV)
+    # Download template (xlsx if possible, else csv)
     data, fname, mime = make_paper_template()
     st.download_button(
-        label=f"Download Template ({fname.split('.')[-1].upper()})",
+        label=f"Download Template ({fname})",
         data=data,
         file_name=fname,
-        mime=mime,
-        use_container_width=False
+        mime=mime
     )
 
-    uploaded = st.file_uploader(
-        "Upload completed template (.xlsx or .csv)",
-        type=["xlsx", "csv"],
-        key="paper_excel_uploader"
-    )
+    uploaded = st.file_uploader("Upload completed file", type=["xlsx", "csv"])
     if uploaded is None:
+        # Show rollback if available
+        if "last_import_reels" in st.session_state and st.session_state["last_import_reels"]:
+            if st.button("↩️ Rollback last import"):
+                n = delete_paper_rows_by_reel_nos(st.session_state["last_import_reels"])
+                st.session_state["last_import_reels"] = []
+                st.success(f"Rolled back {n} reels.")
+                st.rerun()
         return
 
-    # Read the uploaded file
+    # READ FILE
     try:
         if uploaded.name.lower().endswith(".csv"):
             xdf = pd.read_csv(uploaded)
         else:
-            # Pandas needs openpyxl to read .xlsx; handle missing engine cleanly
             try:
                 xdf = pd.read_excel(uploaded)
             except ModuleNotFoundError:
-                st.error(
-                    "Reading .xlsx requires the 'openpyxl' package on the server. "
-                    "Please either add 'openpyxl' to your environment (requirements.txt) "
-                    "or upload the CSV template instead."
-                )
+                st.error("openpyxl missing. Upload CSV instead.")
                 return
     except Exception as e:
-        st.error(f"Could not read the file: {e}")
+        st.error(str(e))
         return
 
-    # Column validation
+    # REQUIRED COLUMNS
     missing = [c for c in PAPER_EXCEL_COLUMNS if c not in xdf.columns]
     if missing:
-        st.error(f"Missing columns in the uploaded file: {missing}")
-        st.info("Download the template above and paste your data into it, then upload again.")
+        st.error(f"Missing columns: {missing}")
         return
 
-    # Insert rows
-    inserted = 0
-    with get_conn() as conn:
-        cur = conn.cursor()
-        for _, r in xdf.iterrows():
-            try:
-                supplier_id = get_or_create_id(conn, "Supplier", "Name", str(r["Reel Supplier"]).strip(), "SupplierId")
-                maker_id    = get_or_create_id(conn, "Maker", "Name", str(r["Reel Maker"]).strip(), "MakerId")
-                bin_id      = parse_bin_label(conn, str(r["Reel Location"]).strip()) if pd.notna(r["Reel Location"]) else None
+    # VALIDATE
+    vdf = validate_import_df(xdf)
+    bad = vdf[vdf["Valid"] == False]
+    good = vdf[vdf["Valid"] == True]
+
+    st.markdown(f"### Preview ({len(good)} valid • {len(bad)} invalid)")
+    st.dataframe(vdf[["Valid", "Errors"] + PAPER_EXCEL_COLUMNS], use_container_width=True)
+
+    col1, col2 = st.columns(2)
+
+    # IMPORT VALID ROWS
+    if col1.button("✅ Import valid rows", disabled=len(good) == 0):
+        imported = []
+        with get_conn() as conn:
+            cur = conn.cursor()
+
+            for _, r in good.iterrows():
+                reel_no = str(r["Reel No"]).strip()
+                imported.append(reel_no)
+
+                supplier_id = get_or_create_id(conn, "Supplier", "Name",
+                                               str(r["Reel Supplier"]).strip(), "SupplierId")
+                maker_id = get_or_create_id(conn, "Maker", "Name",
+                                            str(r["Reel Maker"]).strip(), "MakerId")
+                bin_id = parse_bin_label(conn, str(r["Reel Location"]).strip()) \
+                         if pd.notna(r["Reel Location"]) else None
 
                 cur.execute("""
                     INSERT OR IGNORE INTO PaperReel(
@@ -539,44 +612,53 @@ def rm_upload_excel_ui():
                     ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """, (
                     str(r["SL No."]) if pd.notna(r["SL No."]) else None,
-                    str(r["Reel No"]).strip(),
+                    reel_no,
                     supplier_id, maker_id,
-                    pd.to_datetime(r["Material Rcv Dt."], errors="coerce").date().isoformat()
-                        if pd.notna(r["Material Rcv Dt."]) else None,
-                    pd.to_datetime(r["Maker's/Supplier's Inv Dt."], errors="coerce").date().isoformat()
-                        if pd.notna(r["Maker's/Supplier's Inv Dt."]) else None,
+                    (pd.to_datetime(r["Material Rcv Dt."]).date().isoformat()
+                     if pd.notna(r["Material Rcv Dt."]) else None),
+                    (pd.to_datetime(r["Maker's/Supplier's Inv Dt."]).date().isoformat()
+                     if pd.notna(r["Maker's/Supplier's Inv Dt."]) else None),
                     float(r["Deckle in cm"]) if pd.notna(r["Deckle in cm"]) else None,
                     int(r["GSM"]) if pd.notna(r["GSM"]) else None,
                     int(r["BF"]) if pd.notna(r["BF"]) else None,
-                    str(r["Paper Shade"]).strip() if pd.notna(r["Paper Shade"]) else None,
+                    str(r["Paper Shade"]) if pd.notna(r["Paper Shade"]) else None,
                     float(r["Opening Stk Till Date (Kg)"]) if pd.notna(r["Opening Stk Till Date (Kg)"]) else 0.0,
                     float(r["Weight (Kg)"]) if pd.notna(r["Weight (Kg)"]) else 0.0,
                     bin_id,
-                    str(r["Delivery Challan No."]).strip() if pd.notna(r["Delivery Challan No."]) else None,
+                    str(r["Delivery Challan No."]) if pd.notna(r["Delivery Challan No."]) else None,
                     float(r["Reorder Level (Kg)"]) if pd.notna(r["Reorder Level (Kg)"]) else 0.0,
                     float(r["Paper Rate/Kg"]) if pd.notna(r["Paper Rate/Kg"]) else 0.0,
                     float(r["Transport Rate/Kg"]) if pd.notna(r["Transport Rate/Kg"]) else 0.0,
                     float(r["Basic Landed Cost/Kg"]) if pd.notna(r["Basic Landed Cost/Kg"]) else 0.0,
-                    str(r["Remarks"]).strip() if pd.notna(r["Remarks"]) else None
+                    str(r["Remarks"]) if pd.notna(r["Remarks"]) else None,
                 ))
 
-                # Fetch ReelId & add a Receive movement so closing stock computes
-                cur.execute("SELECT ReelId, WeightKg FROM PaperReel WHERE ReelNo=?", (str(r["Reel No"]).strip(),))
+                # RM Movement
+                cur.execute("SELECT ReelId, WeightKg FROM PaperReel WHERE ReelNo=?", (reel_no,))
                 row = cur.fetchone()
-                if not row:
-                    continue
-                reel_id, wt = int(row[0]), float(row[1] or 0.0)
-                cur.execute("""
-                    INSERT INTO RM_Movement(ReelId, DateTime, Type, QtyKg, ToBinId, RefDocType, RefDocNo)
-                    VALUES(?,?,?,?,?,?,?)
-                """, (reel_id, datetime.now().isoformat(), "Receive", wt, bin_id, uploaded.name.upper(), "UPLOAD"))
-                inserted += 1
+                if row:
+                    reel_id, wt = row[0], row[1]
+                    cur.execute("""
+                        INSERT INTO RM_Movement(ReelId, DateTime, Type, QtyKg, ToBinId, RefDocType, RefDocNo)
+                        VALUES(?,?,?,?,?,?,?)
+                    """, (reel_id, datetime.now().isoformat(), "Receive", wt, bin_id,
+                          uploaded.name.upper(), "UPLOAD"))
 
-            except Exception as e:
-                st.warning(f"Row skipped due to error: {e}")
+        st.session_state["last_import_reels"] = imported
+        st.success(f"Imported {len(imported)} reels.")
+        st.rerun()
 
-    st.success(f"Imported {inserted} paper reels from file: **{uploaded.name}**")
-    st.rerun()
+    # ROLLBACK
+    if col2.button("↩️ Rollback last import"):
+        last = st.session_state.get("last_import_reels", [])
+        if not last:
+            st.info("No recent import to rollback.")
+        else:
+            n = delete_paper_rows_by_reel_nos(last)
+            st.session_state["last_import_reels"] = []
+            st.warning(f"Rolled back {n} reels.")
+            st.rerun()
+
 
 def insert_two_sample_reels():
     """Adds two sample reels (SAMPLE-PR-1, SAMPLE-PR-2)."""
