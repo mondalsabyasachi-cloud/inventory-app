@@ -662,49 +662,106 @@ def rm_transfer_adjust_form():
         st.success(f"{action} recorded for **{chosen}**.")
 
 def show_raw_materials():
-    tabs = st.tabs(["📃 Paper Reels (Grid)", "📥 Receive", "📤 Issue", "🔁 Transfer/Adjust"])
-    t1, t2, t3, t4 = tabs
-
-    
-    # --- Raw Material Type selector (affects what we show below) ---
+    # 1) First: the RM Type selector (always at the top)
+    st.subheader("Raw Materials")
     st.markdown("#### Select Raw Material Type")
-    rm_type = st.selectbox("Raw Material Type", RM_TYPES, index=0, key="rm_type_selector")
-    st.caption("Tip: Choose **Paper Reel** to access the full reel grid and receive/issue/transfer flows.")
+    rm_type = st.selectbox(
+        "Raw Material Type",
+        options=RM_TYPES,
+        index=0,
+        key="rm_type_selector",
+        help="Choose a raw material type to view its inventory screen."
+    )
 
-    # If not Paper Reel, show a friendly placeholder and short-circuit the page
-    if rm_type != "Paper Reel":
-        st.info(f"‘{rm_type}’ tracking is on the roadmap. For now, use **Paper Reel** to explore the full flows.")
-        c_go = st.button("🔁 Switch to Paper Reel", use_container_width=False)
-        if c_go:
-            st.session_state.rm_type_selector = "Paper Reel"
-            st.rerun()
-        # You can put lightweight grids/forms for each RM type here later.
-        return
+    # 2) Branch on selected RM type
+    if rm_type == "Paper Reel":
+        # ---------- EXISTING PAPER REEL UI (tabs) ----------
+        tabs = st.tabs(["📃 Paper Reels (Grid)", "📥 Receive", "📤 Issue", "🔁 Transfer/Adjust"])
+        t1, t2, t3, t4 = tabs
 
-    with t1:
-        st.caption("Tip: Use column filters and the inbuilt download to export.")
-        df = fetch_reel_grid()
+        with t1:
+            st.caption("Tip: Use column filters and the inbuilt download to export.")
+            df = fetch_reel_grid()
 
-        def highlight_reorder(row):
-            try:
-                if float(row["Closing Stock till date"]) <= float(row["Reorder Level"]):
-                    return ["background-color: #fff4f2"] * len(row)
-            except Exception:
-                pass
-            return [""] * len(row)
+            def highlight_reorder(row):
+                try:
+                    if float(row["Closing Stock till date"]) <= float(row["Reorder Level"]):
+                        return ["background-color: #fff4f2"] * len(row)
+                except Exception:
+                    pass
+                return [""] * len(row)
 
-        st.dataframe(
-            df.style.apply(highlight_reorder, axis=1) if len(df) else df,
-            use_container_width=True,
-            hide_index=True
-        )
+            st.dataframe(
+                df.style.apply(highlight_reorder, axis=1) if len(df) else df,
+                use_container_width=True,
+                hide_index=True
+            )
 
-    with t2:
-        rm_receive_form()
-    with t3:
-        rm_issue_form()
-    with t4:
-        rm_transfer_adjust_form()
+        with t2:
+            rm_receive_form()
+
+        with t3:
+            rm_issue_form()
+
+        with t4:
+            rm_transfer_adjust_form()
+
+        return  # Paper Reel branch ends here
+
+    # ---------- PLACEHOLDER SCREENS FOR OTHER RM TYPES ----------
+    # (You can later replace each block below with its own table + forms.)
+
+    st.markdown(f"### {rm_type}")
+    st.info(
+        f"The **{rm_type}** inventory screen is a placeholder for now. "
+        f"You can plug in your own grid and forms here. "
+        "If you want, I can scaffold the DB tables and UI like Paper Reels."
+    )
+
+    # Suggested upcoming components for each RM type
+    with st.expander("Suggested fields & actions", expanded=True):
+        if rm_type == "GUM / Adhesives":
+            st.markdown(
+                "- Batch No., Viscosity, Solid %, Container Size, **Expiry**, Supplier, Maker, "
+                "Receive Date, Bin, **On-hand (L/Kg)**, **Hold** flag, Remarks\n"
+                "- **Receive / Issue / Transfer / Adjust / Hold/Release**"
+            )
+        elif rm_type == "Stitching Wire":
+            st.markdown(
+                "- Gauge, Material, Spool Weight (Kg), Supplier, Receive Date, Bin, **On-hand (Kg)**, Remarks\n"
+                "- **Receive / Issue / Transfer / Adjust**"
+            )
+        elif rm_type == "Strapping Wire":
+            st.markdown(
+                "- Width, Thickness, Material, Coil/Spool Weight, Supplier, Receive Date, Bin, **On-hand (Kg)**\n"
+                "- **Receive / Issue / Transfer / Adjust**"
+            )
+        elif rm_type == "Board / Sheet":
+            st.markdown(
+                "- Size (L×W), Ply/Flute, Caliper, Grade, Bundle Count, Kg/sqm, Supplier, Receive Date, Bin\n"
+                "- **Receive / Issue / Transfer / Adjust**"
+            )
+        elif rm_type == "Ink / Chemicals":
+            st.markdown(
+                "- Shade/Color, Batch, **Expiry**, Viscosity (if applicable), Container Size, HSN/Hazard, Supplier, Bin\n"
+                "- **Receive / Issue / Transfer / Adjust / Hold/Release**"
+            )
+        elif rm_type == "Packaging Accessories":
+            st.markdown(
+                "- Type (Corner, Edge, Bubble, Film, Tape), Size, UoM, Supplier, Bin, **On-hand**\n"
+                "- **Receive / Issue / Transfer / Adjust**"
+            )
+        else:
+            st.markdown(
+                "- Define attributes needed for this material type (specs, commercial, stock, QA)\n"
+                "- **Receive / Issue / Transfer / Adjust**"
+            )
+
+    # Quick switcher back to Paper Reel
+    if st.button("🔁 Switch to Paper Reel"):
+        st.session_state.rm_type_selector = "Paper Reel"
+        st.rerun()
+
 
 # -------------------------
 # WIP
