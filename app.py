@@ -4,7 +4,6 @@
 # Prepared for: Saby Mondal | Packsmart India Pvt Ltd
 # ------------------------------------------------------------
 
-from typing import List
 from io import BytesIO
 import os
 import sqlite3
@@ -34,7 +33,7 @@ CARD_BG = "#ffffff"
 
 # Raw Material type master list (controls the dropdown on Raw Materials page)
 RM_TYPES = [
-    "",
+    "Paper Reel",
     "GUM / Adhesives",
     "Stitching Wire",
     "Strapping Wire",
@@ -140,11 +139,11 @@ def init_db():
             )
         """)
 
-        # Raw Material: s
+        # Raw Material: Paper Reels
         cur.execute("""
             CREATE TABLE IF NOT EXISTS PaperReel(
               ReelId INTEGER PRIMARY KEY AUTOINCREMENT,
-              SLNo INTEGER,
+              SLNo TEXT,
               ReelNo TEXT UNIQUE NOT NULL,
               SupplierId INTEGER,
               MakerId INTEGER,
@@ -339,15 +338,6 @@ COLUMN_GROUPS = {
     "Target Customer": "Planning Hooks",
     "Reel Shifting Date": "Planning Hooks",
 }
-
-
-def get_next_slno(conn) -> int:
-    cur = conn.cursor()
-    cur.execute("SELECT MAX(CAST(SLNo AS INTEGER)) FROM PaperReel")
-    r = cur.fetchone()
-    if r and r[0] is not None:
-        return int(r[0]) + 1
-    return 1
 
 def group_columns_multiindex(df: pd.DataFrame) -> pd.DataFrame:
     """Apply MultiIndex columns using COLUMN_GROUPS as the top level."""
