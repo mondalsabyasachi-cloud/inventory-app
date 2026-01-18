@@ -34,7 +34,7 @@ CARD_BG = "#ffffff"
 
 # Raw Material type master list (controls the dropdown on Raw Materials page)
 RM_TYPES = [
-    "Paper Reel",
+    "",
     "GUM / Adhesives",
     "Stitching Wire",
     "Strapping Wire",
@@ -140,11 +140,11 @@ def init_db():
             )
         """)
 
-        # Raw Material: Paper Reels
+        # Raw Material: s
         cur.execute("""
             CREATE TABLE IF NOT EXISTS PaperReel(
               ReelId INTEGER PRIMARY KEY AUTOINCREMENT,
-              SLNo TEXT,
+              SLNo INTEGER,
               ReelNo TEXT UNIQUE NOT NULL,
               SupplierId INTEGER,
               MakerId INTEGER,
