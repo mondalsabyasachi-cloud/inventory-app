@@ -426,7 +426,7 @@ def get_or_create_id(conn, table: str, key_field: str, key_value: str, id_field:
     return cur.lastrowid
 
 def parse_bin_label(conn, label: str) -> Optional[int]:
-    """Convert 'Main WH/A-1-01' into BinId. If not found, create Warehouse/Bin."""
+    """Convert a label like 'Main WH/A-1-01' into BinId. If not found, create Warehouse/Bin."""
     try:
         wh_name, rest = label.split("/", 1)
         aisle, rack, bin_ = rest.split("-")
@@ -613,7 +613,7 @@ PAPER_EDITABLE_MAP = {
     "Weight (Kg)": "WeightKg",
     "Consume Dt": "LastConsumeDate",
     "Consumption Entry Date": "ConsumptionEntryDate",
-    "Reel Shifting Date": "ReelShiftDate",
+    "Reel Shifting Date": "ReelShiftingDate",
     "Delivery Challan No.": "DeliveryChallanNo",
     "Reorder Level": "ReorderLevelKg",
     "Paper Rate/Kg": "PaperRatePerKg",
@@ -686,7 +686,7 @@ def build_paper_edit_df(calc_df: pd.DataFrame) -> pd.DataFrame:
 def _coerce_value(db_field: str, ui_value):
     """Type-safe coercion before DB UPDATE."""
     numeric_fields = {"DeckleCm","GSM","BF","OpeningKg","WeightKg","ReorderLevelKg","PaperRatePerKg","TransportRatePerKg","BasicLandedCostPerKg"}
-    date_fields    = {"ReceiveDate","SupplierInvDate","LastConsumeDate","ConsumptionEntryDate","ReelSh iftingDate".replace(" ","")}
+    date_fields    = {"ReceiveDate","SupplierInvDate","LastConsumeDate","ConsumptionEntryDate","ReelShiftingDate"}
     if db_field in numeric_fields:
         try:
             return float(ui_value) if ui_value not in (None, "") else None
@@ -983,6 +983,8 @@ def fetch_reel_grid() -> pd.DataFrame:
             """, conn, params=[int(row["ReelId"])]).iloc[0]
             perkg = float(cost["BasicLandedCostPerKg"] or 0.0)
             if perkg <= 0:
+                perkg = float(cost["PaperRatePerKg"] or 0.0) + float(cost["TransportRate/Kg".replace("/Kg","Kg")] or 0.0)  # small guard
+                # Better exact fetch:
                 perkg = float(cost["PaperRatePerKg"] or 0.0) + float(cost["TransportRatePerKg"] or 0.0)
             values.append(round(closing * perkg, 2))
 
@@ -1623,8 +1625,7 @@ if page == "Dashboard":
 elif page == "Raw Materials":
     show_raw_materials()
 elif page == "WIP Items":
-    show_wip()
-elif":
+    "Finished Goods":
     show_fg()
 else:
     show_settings()
