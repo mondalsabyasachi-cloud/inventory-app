@@ -14,6 +14,7 @@ from typing import Optional, Tuple, Dict
 import pandas as pd
 import streamlit as st
 
+
 # -------------------------
 # Page config & theme
 # -------------------------
@@ -47,6 +48,7 @@ st.markdown(f"""
     .stTabs [data-baseweb="tab"] {{ padding-top: 8px; padding-bottom: 8px; }}
 </style>
 """, unsafe_allow_html=True)
+
 
 # -------------------------
 # DB helpers
@@ -112,7 +114,7 @@ def init_db():
             )
         """)
 
-        # Raw Material: Paper Reels
+        # Raw Material: Paper Reels (full field set)
         cur.execute("""
             CREATE TABLE IF NOT EXISTS PaperReel(
               ReelId INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -225,6 +227,7 @@ def init_db():
 
 init_db()
 
+
 # -------------------------
 # Utilities
 # -------------------------
@@ -265,8 +268,9 @@ def compute_reel_closing(conn, reel_id: int) -> Tuple[float, float]:
     closing = opening + receipts - (issues + scrap + trans_out) + trans_in + adjust
     return (round(consumed, 3), round(closing, 3))
 
+
 # -------------------------
-# Demo Data
+# Demo Data seeding
 # -------------------------
 def seed_demo_data():
     with get_conn() as conn:
@@ -315,7 +319,6 @@ def seed_demo_data():
         """, ("1", "Reel-1001", sup, mk, (date.today()-relativedelta(days=5)).isoformat(),
               (date.today()-relativedelta(days=5)).isoformat(), 180.0, 150, 22, "Natural",
               0.0, 1200.0, sample_bin, 1, 1, "DC-8891", 300.0, 45.0, 2.5, 47.5, "Demo reel"))
-
         cur.execute("SELECT ReelId FROM PaperReel WHERE ReelNo='Reel-1001'"); rid1 = cur.fetchone()[0]
         cur.execute("INSERT OR IGNORE INTO RM_Movement(ReelId, DateTime, Type, QtyKg) VALUES(?,?,?,?)",
                     (rid1, datetime.now().isoformat(), "Receive", 1200.0))
@@ -349,34 +352,35 @@ def seed_demo_data():
 
     st.success("Demo data seeded.")
 
+
 # -------------------------
 # Navigation (single source of truth)
 # -------------------------
 PAGES = ["Dashboard", "Raw Materials", "WIP Items", "Finished Goods", "Settings"]
 
-if "_page" not in st.session_state:
-    st.session_state["_page"] = "Dashboard"
+# Initialize the radio's value once
+if "left_nav" not in st.session_state:
+    st.session_state.left_nav = "Dashboard"
 
 with st.sidebar:
     st.markdown("### 🧃 Packsmart India Pvt Ltd\n**Inventory System**")
     nav_choice = st.radio(
         "Go to",
         PAGES,
-        index=PAGES.index(st.session_state["_page"]),
+        index=PAGES.index(st.session_state.left_nav),
+        key="left_nav",
         label_visibility="collapsed",
         captions=[
             "Overview KPIs", "Paper, Boards, GUM etc.", "In-process tracking",
             "FG stock & dispatch", "Masters & demo"
-        ],
-        key="left_nav"
+        ]
     )
-    # If the radio changed, update page and rerun
-    if nav_choice != st.session_state["_page"]:
-        st.session_state["_page"] = nav_choice
-        st.rerun()
-
     st.markdown("---")
     st.caption("Logged in as: Stores/Planning")
+
+# Always read the selected page from the radio key
+page = st.session_state.left_nav
+
 
 # -------------------------
 # Dashboard
@@ -436,14 +440,15 @@ def show_dashboard():
         st.subheader("➕ Add Inventory")
         st.caption("Use **Raw Materials** or **Finished Goods** pages for detailed operations.")
         if st.button("Go to Raw Materials", use_container_width=True, type="primary"):
-            st.session_state["_page"] = "Raw Materials"
+            st.session_state.left_nav = "Raw Materials"   # update radio
             st.rerun()
     with c2:
         st.subheader("🔎 View Inventory")
         st.caption("Filter and drill down in each module (RM / WIP / FG).")
         if st.button("Go to Finished Goods", use_container_width=True):
-            st.session_state["_page"] = "Finished Goods"
+            st.session_state.left_nav = "Finished Goods"  # update radio
             st.rerun()
+
 
 # -------------------------
 # Raw Materials (Paper Reels)
@@ -641,7 +646,9 @@ def rm_transfer_adjust_form():
 
 def show_raw_materials():
     tabs = st.tabs(["📃 Paper Reels (Grid)", "📥 Receive", "📤 Issue", "🔁 Transfer/Adjust"])
-    with tabs[0]:
+    t1, t2, t3, t4 = tabs
+
+    with t1:
         st.caption("Tip: Use column filters and the inbuilt download to export.")
         df = fetch_reel_grid()
 
@@ -659,12 +666,13 @@ def show_raw_materials():
             hide_index=True
         )
 
-    with tabs[1]:
+    with t2:
         rm_receive_form()
-    with tabs[2]:
+    with t3:
         rm_issue_form()
-    with tabs[3]:
+    with t4:
         rm_transfer_adjust_form()
+
 
 # -------------------------
 # WIP
@@ -745,6 +753,7 @@ def show_wip():
             conn.execute("UPDATE WIP_Unit SET Status=?, OutTime=? WHERE UnitId=?",
                          (status_out, datetime.now().isoformat(), int(unit_id)))
         st.success("WIP scanned-out.")
+
 
 # -------------------------
 # Finished Goods
@@ -854,8 +863,7 @@ def show_fg():
     with c2:
         sku = st.selectbox("SKU", options=sku_opts)
     with c3:
-        st.write("")
-        st.write("")
+        st.write(""); st.write("")
         btn = st.button("View Stock", type="primary")
 
     if btn:
@@ -871,11 +879,12 @@ def show_fg():
 
     st.markdown("---")
     tabs = st.tabs(["📦 Pack/Putaway", "🧾 Reserve & Dispatch", "📋 FG Inventory"])
-    with tabs[0]:
+    t1, t2, t3 = tabs
+    with t1:
         fg_pack_form()
-    with tabs[1]:
+    with t2:
         fg_reserve_dispatch()
-    with tabs[2]:
+    with t3:
         with get_conn() as conn:
             inv = pd.read_sql_query("""
                 SELECT p.PalletId, s.SKUCode, c.Name AS Customer, p.Batch, p.PackDate,
@@ -887,6 +896,7 @@ def show_fg():
                 ORDER BY p.PackDate DESC
             """, conn)
         st.dataframe(inv, use_container_width=True, hide_index=True)
+
 
 # -------------------------
 # Settings (masters + demo)
@@ -956,11 +966,10 @@ def show_settings():
     if st.button("Seed Demo Data", type="primary"):
         seed_demo_data()
 
+
 # -------------------------
 # Router
 # -------------------------
-page = st.session_state.get("_page", "Dashboard")
-
 if page == "Dashboard":
     show_dashboard()
 elif page == "Raw Materials":
@@ -971,3 +980,4 @@ elif page == "Finished Goods":
     show_fg()
 else:
     show_settings()
+``
