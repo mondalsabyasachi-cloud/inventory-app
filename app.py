@@ -339,6 +339,14 @@ COLUMN_GROUPS = {
     "Reel Shifting Date": "Planning Hooks",
 }
 
+def get_next_slno(conn) -> int:
+    cur = conn.cursor()
+    cur.execute("SELECT MAX(CAST(SLNo AS INTEGER)) FROM PaperReel")
+    r = cur.fetchone()
+    if r and r[0] is not None:
+        return int(r[0]) + 1
+    return 1
+
 def group_columns_multiindex(df: pd.DataFrame) -> pd.DataFrame:
     """Apply MultiIndex columns using COLUMN_GROUPS as the top level."""
     tuples = []
