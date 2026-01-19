@@ -1240,19 +1240,19 @@ def show_raw_materials():
     total_stock_value = 0.0
 
     if not display_df.empty:
-    if "Closing Stock till date" in display_df.columns:
-        total_stock_kg = (
-            pd.to_numeric(display_df["Closing Stock till date"], errors="coerce")
-            .fillna(0)
-            .sum()
-        )
+      if "Closing Stock till date" in display_df.columns:
+          total_stock_kg = (
+              pd.to_numeric(display_df["Closing Stock till date"], errors="coerce")
+              .fillna(0)
+              .sum()
+          )
 
-    if "Current Stock Value(INR)" in display_df.columns:
-        total_stock_value = (
-            pd.to_numeric(display_df["Current Stock Value(INR)"], errors="coerce")
-            .fillna(0)
-            .sum()
-        )
+      if "Current Stock Value(INR)" in display_df.columns:
+          total_stock_value = (
+              pd.to_numeric(display_df["Current Stock Value(INR)"], errors="coerce")
+              .fillna(0)
+              .sum()
+          )
 # ===============================================================
 
         def highlight_reorder(row):
