@@ -1107,7 +1107,6 @@ def rm_transfer_adjust_form():
                     VALUES(?,?,?,?,?)
                 """, (rid, datetime.now().isoformat(), "Release", 0.0, refdoc))
         st.success(f"{action} recorded for **{chosen}**.")
-
 def show_raw_materials():
     st.subheader("Raw Materials")
 
@@ -1121,29 +1120,19 @@ def show_raw_materials():
     if rm_type != "Paper Reel":
         st.info("Only Paper Reel is enabled currently.")
         return
-    # ---------- KPI Calculations ----------
-    total_stock_kg = 0.0
-    total_stock_value = 0.0
-
-    if not df_f.empty:
-        total_stock_kg = (
-            pd.to_numeric(df_f["Closing Stock till date"], errors="coerce")
-            .fillna(0)
-            .sum()
-        )
-
-    total_stock_value = (
-        pd.to_numeric(df_f["Current Stock Value(INR)"], errors="coerce")
-        .fillna(0)
-        .sum()
-    )
 
     # -------------------------------------------------
-    # Paper Reels header + actions + KPIs (same row)
+    # Fetch & compute data ONCE
+    # -------------------------------------------------
+    base_df = fetch_reel_grid()
+    calc_df = build_paper_grid_with_calcs(base_df)
+
+    # -------------------------------------------------
+    # Header + actions + KPIs
     # -------------------------------------------------
     st.markdown("### 📜 Paper Reels")
 
-    h1, h2, h3, h4 = st.columns([1.6, 1.2, 1.6, 1.6])
+    h1, h2, h3, h4 = st.columns([1.8, 1.2, 1.5, 1.5])
 
     with h1:
         ca, cb = st.columns(2)
@@ -1158,23 +1147,18 @@ def show_raw_materials():
                 help="Show grouped headers for readability."
             )
 
-    # -------------------------------------------------
-    # Fetch data once (used everywhere)
-    # -------------------------------------------------
-    base_df = fetch_reel_grid()
-    calc_df = build_paper_grid_with_calcs(base_df)
-
-    total_closing_kg = (
+    # KPI calculations (GLOBAL, before filters)
+    total_stock_kg = (
         pd.to_numeric(calc_df["Closing Stock till date"], errors="coerce")
         .fillna(0)
         .sum()
-    )
+    ) if not calc_df.empty else 0.0
 
     total_stock_value = (
         pd.to_numeric(calc_df["Current Stock Value(INR)"], errors="coerce")
         .fillna(0)
         .sum()
-    )
+    ) if not calc_df.empty else 0.0
 
     with h2:
         st.markdown(
@@ -1184,9 +1168,9 @@ def show_raw_materials():
                 <div class="erp-kpi-value">{total_stock_kg:,.2f}</div>
             </div>
             """,
-            unsafe_allow_html=True,
+            unsafe_allow_html=True
         )
-    
+
     with h3:
         st.markdown(
             f"""
@@ -1195,9 +1179,8 @@ def show_raw_materials():
                 <div class="erp-kpi-value">₹ {total_stock_value:,.2f}</div>
             </div>
             """,
-            unsafe_allow_html=True,
+            unsafe_allow_html=True
         )
-
 
     # -------------------------------------------------
     # Filters
@@ -1219,7 +1202,7 @@ def show_raw_materials():
 
     if q_reel:
         df_f = df_f[df_f["Reel No"].str.contains(q_reel, case=False, na=False)]
-    if q_supplier and "Reel Supplier" in df_f.columns:
+    if q_supplier:
         df_f = df_f[df_f["Reel Supplier"].str.contains(q_supplier, case=False, na=False)]
     if q_from:
         s = pd.to_datetime(df_f["Material Rcv Dt."], errors="coerce")
@@ -1231,28 +1214,33 @@ def show_raw_materials():
     # -------------------------------------------------
     # Display table
     # -------------------------------------------------
+    def highlight_reorder(row):
+        try:
+            if isinstance(row.index, pd.MultiIndex):
+                closing = row[("Stock & Consumption", "Closing Stock till date")]
+                reorder = row[("Stock & Consumption", "Reorder Level")]
+            else:
+                closing = row["Closing Stock till date"]
+                reorder = row["Reorder Level"]
+            if float(closing) <= float(reorder):
+                return ["background-color: #fff4f2"] * len(row)
+        except Exception:
+            pass
+        return [""] * len(row)
+
     with st.container(border=True):
         st.caption("Tip: Use column filters and the inbuilt download to export.")
 
         display_df = group_columns_multiindex(df_f) if grouped else df_f
-    # ================= KPI: TOTAL PAPER REEL STOCK =================
-    total_stock_kg = 0.0
-    total_stock_value = 0.0
 
-    if not display_df.empty:
-      if "Closing Stock till date" in display_df.columns:
-          total_stock_kg = (
-              pd.to_numeric(display_df["Closing Stock till date"], errors="coerce")
-              .fillna(0)
-              .sum()
-          )
+        st.dataframe(
+            display_df.style.apply(highlight_reorder, axis=1)
+            if len(display_df)
+            else display_df,
+            use_container_width=True,
+            hide_index=True
+        )
 
-      if "Current Stock Value(INR)" in display_df.columns:
-          total_stock_value = (
-              pd.to_numeric(display_df["Current Stock Value(INR)"], errors="coerce")
-              .fillna(0)
-              .sum()
-          )
 # ===============================================================
 
         def highlight_reorder(row):
