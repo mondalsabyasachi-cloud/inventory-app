@@ -1316,6 +1316,15 @@ def show_raw_materials():
     # -------------------------------------------------
     def highlight_reorder(row):
         try:
+            # STEP-3C: Highlight negative Opening Stock
+            if isinstance(row.index, pd.MultiIndex):
+                opening = row[("Stock & Consumption", "Opening Stk Till Date")]
+            else:
+                opening = row["Opening Stk Till Date"]
+
+            if float(opening) < 0:
+                return ["background-color: #ffe4e6"] * len(row)
+            # Existing reorder logic
             if isinstance(row.index, pd.MultiIndex):
                 closing = row[("Stock & Consumption", "Closing Stock till date")]
                 reorder = row[("Stock & Consumption", "Reorder Level")]
@@ -1367,6 +1376,7 @@ def show_raw_materials():
             disabled=[
                 "Reel No",                 # primary identifier
                 "Deckle in Inch"           # computed
+                "Opening Stk Till Date"    # system derived (STEP-3)
             ]
         )
 
