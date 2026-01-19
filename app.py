@@ -17,6 +17,24 @@ import pandas as pd
 import streamlit as st
 
 # -------------------------
+# Paper Reel Column Canon (GLOBAL)
+# -------------------------
+PR_COL = {
+    "SL": "SL No",
+    "OPENING": "Opening Stk Till Date(Kg)",
+    "DECKLE_CM": "Deckle(CM)",
+    "DECKLE_IN": "Deckle(Inch)",
+    "REEL_WT": "Reel Original Weight(Kg)",
+    "CONS_WT": "Consumed Wt(Kg)",
+    "CLOSE": "Closing Stock Till Date(Kg)",
+    "REORDER": "Reorder Level(Kg)",
+    "P_RATE": "Paper Rate/Kg(₹)",
+    "T_RATE": "Transport Rate/Kg(₹)",
+    "L_RATE": "Basic Landed Cost/Kg(₹)",
+    "STOCK_VAL": "Current Stock Value(₹)"
+}
+
+# -------------------------
 # Page config & theme
 # -------------------------
 st.set_page_config(
@@ -273,6 +291,24 @@ def init_db():
         """)
 
 init_db()
+
+# -------------------------
+# SL No resequencing (Paper Reel)
+# -------------------------
+def resequence_slno(conn):
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT ReelId
+        FROM PaperReel
+        ORDER BY ReceiveDate, ReelId
+    """)
+    rows = cur.fetchall()
+
+    for idx, r in enumerate(rows, start=1):
+        cur.execute(
+            "UPDATE PaperReel SET SLNo=? WHERE ReelId=?",
+            (idx, r[0])
+        )
 
 # -------------------------
 # Utilities
@@ -785,6 +821,8 @@ def delete_paper_rows_by_reel_nos(reel_nos) -> int:
             cur.execute("DELETE FROM RM_Movement WHERE ReelId=?", (rid,))
             cur.execute("DELETE FROM PaperReel   WHERE ReelId=?", (rid,))
             deleted += 1
+            
+    resequence_slno(conn)
     return deleted
 
 # -------------------------
