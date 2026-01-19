@@ -418,13 +418,47 @@ def paper_cost_per_kg(row: pd.Series) -> float:
     except Exception:
         return 0.0
 
+# -------------------------
+# Opening Stock Carry-Forward Logic
+# -------------------------
+def apply_opening_stock_logic(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Opening Stk Till Date (Kg) logic:
+    - First (Reel Maker + Reel No) => 0
+    - Next occurrences => previous Closing Stock Till Date(Kg)
+    """
+    if df.empty:
+        return df
+
+    df = df.copy()
+    df["_key"] = df["Reel Maker"].astype(str) + "||" + df["Reel No"].astype(str)
+
+    df["Opening Stk Till Date"] = 0.0
+    last_close = {}
+
+    for idx, row in df.iterrows():
+        key = row["_key"]
+        if key in last_close:
+            df.at[idx, "Opening Stk Till Date"] = last_close[key]
+        else:
+            df.at[idx, "Opening Stk Till Date"] = 0.0
+
+        closing = row.get("Closing Stock till date", 0)
+        last_close[key] = closing
+
+    df.drop(columns=["_key"], inplace=True)
+    return df
+
 def build_paper_grid_with_calcs(raw_df: pd.DataFrame) -> pd.DataFrame:
     """Takes the flat DataFrame from fetch_reel_grid() and fills computed columns."""
     if raw_df.empty:
         return raw_df
 
     df = raw_df.copy()
+    # Apply Opening Stock carry-forward logic
+    df = apply_opening_stock_logic(df)
 
+    
     # Reel Holding Time (Days): ensure present
     if "Material Rcv Dt." in df.columns and "Reel Holding Time (Days)" not in df.columns:
         rcvs = pd.to_datetime(df["Material Rcv Dt."], errors="coerce")
