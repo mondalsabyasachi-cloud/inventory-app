@@ -1233,7 +1233,7 @@ def show_raw_materials():
                     st.session_state.pop("paper_edit_orig", None)
                     st.session_state.pop("paper_edit_df",   None)
                     st.rerun()
-# ------- Per-row delete buttons (next to filtered view) -------
+#  ------- Per-row delete buttons (next to filtered view) -------
 #       st.markdown("#### Quick delete (per row)")
 #       if df_f.empty:
 #           st.info("No rows match filters.")
