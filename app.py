@@ -1210,22 +1210,22 @@ def show_raw_materials():
     with f1:
         q_reel = st.text_input("Reel No").strip()
     with f2:
-        q_bf = st.text_input("BF").strip()
+        q_bf = st.number_input("BF", min_value=0, value=0, step=1)
     with f3:
-        q_gsm = st.date_input("GSM").strip()
+        q_gsm = st.number_input("GSM", min_value=0, value=0, step=1)
     with f4:
-        q_deckle = st.date_input("Deckle (cm)").strip()
+        q_deckle = st.number_input("Deckle (cm)", min_value=0.0, value=0.0, step=0.1)
 
     df_f = calc_df.copy()
 
     if q_reel:
         df_f = df_f[df_f["Reel No"].str.contains(q_reel, case=False, na=False)]
-    if q_bf:
-        df_f = df_f[pd.to_numeric(df_f["BF"], errors="coerce") == float(q_bf)]
-    if q_gsm:
-        df_f = df_f[pd.to_numeric(df_f["GSM"], errors="coerce") == float(q_gsm)]
-    if q_deckle:
-        df_f = df_f[pd.to_numeric(df_f["Deckle in cm"], errors="coerce") == float(q_deckle)]
+    if q_bf > 0:
+        df_f = df_f[pd.to_numeric(df_f["BF"], errors="coerce") == q_bf]
+    if q_gsm > 0:
+        df_f = df_f[pd.to_numeric(df_f["GSM"], errors="coerce") == q_gsm]
+    if q_deckle > 0:
+        df_f = pd.to_numeric(df_f["Deckle in cm"], errors="coerce").round(1) == round(q_deckle, 1)]
 
     # -------------------------------------------------
     # Display table
