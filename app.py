@@ -1285,7 +1285,7 @@ def show_raw_materials():
             use_container_width=True,
             hide_index=True,
             num_rows="fixed",
-            key="paper_bulk_editor"
+            key="paper_bulk_editor",
             column_config={
                 "Select": st.column_config.CheckboxColumn(
                     "Delete",
