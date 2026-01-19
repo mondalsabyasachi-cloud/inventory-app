@@ -1085,8 +1085,8 @@ def rm_receive_form():
     with c1:
         sl = st.text_input("SL No.")
         reelno = st.text_input("Reel No*", placeholder="e.g., Reel-1050")
-        supplier = st.selectbox("Reel Supplier*", options=suppliers)
-        maker = st.selectbox("Reel Maker*", options=makers)
+        supplier = st.selectbox("Reel Supplier*", options=suppliers, help="Select from Supplier master. Add new supplier via Settings.")
+        maker = st.selectbox("Reel Maker*", options=makers, help="Select from Maker master. Add new maker via Settings.")
         rcv_dt = st.date_input("Material Rcv Dt.", value=date.today())
         inv_dt = st.date_input("Maker's/Supplier's Inv Dt.", value=date.today())
     with c2:
@@ -1392,9 +1392,12 @@ def show_raw_materials():
                 )
             },
             disabled=[
-                "Reel No",                 # primary identifier
-                "Deckle in Inch"           # computed
-                "Opening Stk Till Date"    # system derived (STEP-3)
+                "Reel No",                      # primary identifier
+                "Deckle in Inch",               # computed
+                "Opening Stk Till Date",        # system derived
+                "Closing Stock till date",      # system derived
+                "Reel Supplier",                # master driven (STEP-5)
+                "Reel Maker"                    # master driven (STEP-5)
             ]
         )
 
@@ -1724,6 +1727,51 @@ def show_settings():
                         st.success("Bin saved.")
                     else:
                         st.warning("Create the Warehouse first.")
+    st.markdown("---")
+
+    # =========================
+    # Reel Supplier Master
+    # =========================
+    st.subheader("🧾 Reel Supplier (Master)")
+
+    new_supplier = st.text_input(
+        "Supplier Name",
+        key="settings_new_supplier"
+    )
+
+    if st.button("Add Supplier", key="btn_add_supplier"):
+        if new_supplier.strip():
+            with get_conn() as conn:
+                conn.execute(
+                    "INSERT OR IGNORE INTO Supplier(Name) VALUES(?)",
+                    (new_supplier.strip(),)
+                )
+            st.success("Supplier added successfully.")
+        else:
+            st.warning("Supplier name cannot be empty.")
+
+    st.markdown("---")
+
+    # =========================
+    # Reel Maker Master
+    # =========================
+    st.subheader("🏭 Reel Maker (Master)")
+
+    new_maker = st.text_input(
+        "Maker Name",
+        key="settings_new_maker"
+    )
+
+    if st.button("Add Maker", key="btn_add_maker"):
+        if new_maker.strip():
+            with get_conn() as conn:
+                conn.execute(
+                    "INSERT OR IGNORE INTO Maker(Name) VALUES(?)",
+                    (new_maker.strip(),)
+                )
+            st.success("Maker added successfully.")
+        else:
+            st.warning("Maker name cannot be empty.")
 
     st.markdown("---")
     st.warning("**Demo Mode**: Inserts example customers, SKUs, bins, reels, and pallets.")
