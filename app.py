@@ -1234,26 +1234,28 @@ def show_raw_materials():
                     st.session_state.pop("paper_edit_df",   None)
                     st.rerun()
 
-        # ------- Per-row delete buttons (next to filtered view) -------
-        st.markdown("#### Quick delete (per row)")
-        if df_f.empty:
-            st.info("No rows match filters.")
-        else:
-            # show compact list with a delete button for each visible row
-            for _, row in df_f[["Reel No", "Material Rcv Dt.", "Reel Supplier", "Weight (Kg)"]].iterrows():
-                rno = str(row["Reel No"])
-                cols = st.columns([3, 2, 3, 2, 1])
-                cols[0].markdown(f"**{rno}**")
-                cols[1].markdown(str(row["Material Rcv Dt."]))
-                cols[2].markdown(row["Reel Supplier"])
-                cols[3].markdown(f'{row["Weight (Kg)"]}')
-                if cols[4].button("🗑", key=f"del_{rno}", help=f"Delete {rno}"):
-                    n = delete_paper_rows_by_reel_nos([rno])
-                    if n > 0:
-                        st.warning(f"Deleted {rno}")
-                        st.rerun()
-                    else:
-                        st.info("Row not found or already deleted.")
+ """
+# ------- Per-row delete buttons (next to filtered view) -------
+st.markdown("#### Quick delete (per row)")
+if df_f.empty:
+    st.info("No rows match filters.")
+else:
+    # show compact list with a delete button for each visible row
+    for _, row in df_f[["Reel No", "Material Rcv Dt.", "Reel Supplier", "Weight (Kg)"]].iterrows():
+        rno = str(row["Reel No"])
+        cols = st.columns([3, 2, 3, 2, 1])
+        cols[0].markdown(f"**{rno}**")
+        cols[1].markdown(str(row["Material Rcv Dt."]))
+        cols[2].markdown(row["Reel Supplier"])
+        cols[3].markdown(f'{row["Weight (Kg)"]}')
+        if cols[4].button("🗑", key=f"del_{rno}", help=f"Delete {rno}"):
+            n = delete_paper_rows_by_reel_nos([rno])
+            if n > 0:
+                st.warning(f"Deleted {rno}")
+                st.rerun()
+            else:
+                st.info("Row not found or already deleted.")
+"""
 
         # Upload Excel expander
         with st.expander("⬆ Upload Paper Reels from Excel (.xlsx)", expanded=False):
