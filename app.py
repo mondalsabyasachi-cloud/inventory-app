@@ -1178,7 +1178,34 @@ def show_raw_materials():
         .sum()
     ) if not calc_df.empty else 0.0
 
-    with h2:
+    # -------------------------------------------------
+    # ERP KPI ROW (Total Reel Weight & Cost)
+    # -------------------------------------------------
+    k1, k2 = st.columns(2)
+
+    with k1:
+        st.markdown(
+            f"""
+            <div class="erp-kpi">
+                <div class="erp-kpi-label">Total Reel Weight (Kg)</div>
+                <div class="erp-kpi-value">{total_stock_kg:,.2f}</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    with k2:
+        st.markdown(
+            f"""
+            <div class="erp-kpi">
+                <div class="erp-kpi-label">Total Reel Cost (₹)</div>
+                <div class="erp-kpi-value">₹ {total_stock_value:,.2f}</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        with h2:
         st.markdown(
             f"""
             <div class="erp-kpi">
