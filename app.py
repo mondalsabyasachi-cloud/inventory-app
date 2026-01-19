@@ -1176,7 +1176,7 @@ def show_raw_materials():
             f"""
             <div class="erp-kpi">
                 <div class="erp-kpi-label">Total Stock Value (₹)</div>
-                <div class="erp-kpi-value">{Total Stock Value:,.2f}</div>
+                <div class="erp-kpi-value">₹ {total_stock_value:,.2f}</div>
             </div>
             """,
             unsafe_allow_html=True,
