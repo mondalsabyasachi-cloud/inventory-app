@@ -1170,10 +1170,17 @@ def show_raw_materials():
             )
 
         # ---------- Edit / Delete (C1-B: checkbox + bulk) ----------
-      st.caption(
-    "ℹ️ The edit table below intentionally shows only editable fields. "
-    "Computed, stock, and reference columns are hidden to ensure data integrity."
-)
+            st.dataframe(...)
+
+# -------- Edit / Delete (C1-B: checkbox + bulk) --------
+            st.caption(
+                "ℹ️ The edit table below intentionally shows only editable fields. "
+                "Computed, stock, and reference columns are hidden to ensure data integrity."
+            )
+
+with st.expander("✏️ Edit / Delete rows (single or bulk)", expanded=False):
+
+        
 
         with st.expander("✏️ Edit / Delete rows (single or bulk)", expanded=False):
 
