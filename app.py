@@ -1255,22 +1255,22 @@ def show_raw_materials():
                     st.rerun()
             else:
                 st.info("Row not found or already deleted.")
-"""
 
-        # Upload Excel expander
-        with st.expander("⬆ Upload Paper Reels from Excel (.xlsx)", expanded=False):
-            rm_upload_excel_ui()
 
-        # Forms as tabs (Receive / Issue / Transfer)
-        tabs = st.tabs(["📥 Receive", "📤 Issue", "🔁 Transfer/Adjust"])
-        with tabs[0]:
-            rm_receive_form()
-        with tabs[1]:
-            rm_issue_form()
-        with tabs[2]:
-            rm_transfer_adjust_form()
-
-        return  # end Paper Reels
+ #       # Upload Excel expander
+ #       with st.expander("⬆ Upload Paper Reels from Excel (.xlsx)", expanded=False):
+ #           rm_upload_excel_ui()
+ #
+ #      # Forms as tabs (Receive / Issue / Transfer)
+ #     tabs = st.tabs(["📥 Receive", "📤 Issue", "🔁 Transfer/Adjust"])
+ #    with tabs[0]:
+ #       rm_receive_form()
+ #  with tabs[1]:
+  #    rm_issue_form()
+   #     with tabs[2]:
+         #   rm_transfer_adjust_form()
+#
+ #       return  # end Paper Reels
 
     # ---------- PLACEHOLDERS for other RM types ----------
     st.markdown(f"### {rm_type}")
