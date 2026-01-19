@@ -1205,7 +1205,7 @@ def show_raw_materials():
             unsafe_allow_html=True
         )
 
-        with h2:
+    with h2:
         st.markdown(
             f"""
             <div class="erp-kpi">
