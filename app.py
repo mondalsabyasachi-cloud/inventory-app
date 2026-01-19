@@ -1283,7 +1283,7 @@ with st.expander("✏️ Edit / Delete rows (single or bulk)", expanded=False):
 
 
     # ---------- PLACEHOLDERS for other RM types ----------
-    st.markdown(f"### {rm_type}")
+   st.markdown(f"### {rm_type}")
     st.info(
         f"The **{rm_type}** inventory screen is a placeholder for now. "
         f"You can plug in your own grid and forms here. "
