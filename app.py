@@ -1342,6 +1342,16 @@ def show_raw_materials():
 
             if float(opening) < 0:
                 return ["background-color: #ffe4e6"] * len(row)
+            # STEP-4B: Highlight negative Closing Stock
+            if isinstance(row.index, pd.MultiIndex):
+                closing_val = row[("Stock & Consumption", "Closing Stock till date")]
+            else:
+                closing_val = row["Closing Stock till date"]
+
+            if float(closing_val) < 0:
+                return ["background-color: #fecaca"] * len(row)
+    
+
             # Existing reorder logic
             if isinstance(row.index, pd.MultiIndex):
                 closing = row[("Stock & Consumption", "Closing Stock till date")]
@@ -1395,6 +1405,7 @@ def show_raw_materials():
                 "Reel No",                 # primary identifier
                 "Deckle in Inch"           # computed
                 "Opening Stk Till Date"    # system derived (STEP-3)
+                "Closing Stock till date"       # system derived (STEP-4)    
             ]
         )
 
