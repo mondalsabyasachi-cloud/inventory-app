@@ -1283,6 +1283,58 @@ def show_raw_materials():
             use_container_width=True,
             hide_index=True
         )
+    # -------------------------------------------------
+    # Display table (WITH EXPORT)
+    # -------------------------------------------------
+    def highlight_reorder(row):
+        try:
+            if isinstance(row.index, pd.MultiIndex):
+                closing = row[("Stock & Consumption", "Closing Stock till date")]
+                reorder = row[("Stock & Consumption", "Reorder Level")]
+            else:
+                closing = row["Closing Stock till date"]
+                reorder = row["Reorder Level"]
+            if float(closing) <= float(reorder):
+                return ["background-color: #fff4f2"] * len(row)
+        except Exception:
+            pass
+        return [""] * len(row)
+
+    with st.container(border=True):
+        st.caption("Tip: Use column filters and the inbuilt download to export.")
+
+        display_df = group_columns_multiindex(df_f) if grouped else df_f
+
+        st.dataframe(
+            display_df.style.apply(highlight_reorder, axis=1)
+            if len(display_df)
+            else display_df,
+            use_container_width=True,
+            hide_index=True
+        )
+
+    st.markdown("---")
+
+    # -------------------------------------------------
+    # RECEIVE / ISSUE / TRANSFER (GOES LAST)
+    # -------------------------------------------------
+    tabs = st.tabs(["📥 Receive", "📤 Issue", "🔁 Transfer / Adjust"])
+
+    with tabs[0]:
+        rm_receive_form()
+
+    with tabs[1]:
+        rm_issue_form()
+
+    with tabs[2]:
+        rm_transfer_adjust_form()
+
+    st.markdown("---")
+
+    # -------------------------------------------------
+    # EXCEL UPLOAD (RESTORED – WITH VALIDATIONS)
+    # -------------------------------------------------
+    rm_upload_excel_ui()
 
 
 # -------------------------
