@@ -1103,47 +1103,47 @@ def show_raw_materials():
     # ===============================
     if rm_type == "Paper Reel":
         # ---------------- Paper Reels Header + KPIs ----------------
-h1, h2, h3, h4 = st.columns([2.5, 1.2, 1.2, 2])
-
-with h1:
-    st.markdown("### 📜 Paper Reels")
-
-with h2:
-    total_closing_kg = float(
-        pd.to_numeric(calc_df["Closing Stock till date"], errors="coerce")
-        .fillna(0)
-        .sum()
-    ) if not calc_df.empty else 0.0
-
-    st.metric(
-        label="Total Closing Stock (Kg)",
-        value=f"{total_closing_kg:,.2f}"
-    )
-
-with h3:
-    total_stock_value = float(
-        pd.to_numeric(calc_df["Current Stock Value(INR)"], errors="coerce")
-        .fillna(0)
-        .sum()
-    ) if not calc_df.empty else 0.0
-
-    st.metric(
-        label="Total Reel Stock Value (₹)",
-        value=f"{total_stock_value:,.2f}"
-    )
-
-with h4:
-    ca, cb = st.columns(2)
-    with ca:
-        if st.button("➕ Add 2 Sample Reels", use_container_width=True):
-            insert_two_sample_reels()
-            st.rerun()
-    with cb:
-        grouped = st.toggle(
-            "Group columns",
-            value=True,
-            help="Show grouped headers for readability."
-        )
+                h1, h2, h3, h4 = st.columns([2.5, 1.2, 1.2, 2])
+                
+                with h1:
+                    st.markdown("### 📜 Paper Reels")
+                
+                with h2:
+                    total_closing_kg = float(
+                        pd.to_numeric(calc_df["Closing Stock till date"], errors="coerce")
+                        .fillna(0)
+                        .sum()
+                    ) if not calc_df.empty else 0.0
+                
+                    st.metric(
+                        label="Total Closing Stock (Kg)",
+                        value=f"{total_closing_kg:,.2f}"
+                    )
+                
+                with h3:
+                    total_stock_value = float(
+                        pd.to_numeric(calc_df["Current Stock Value(INR)"], errors="coerce")
+                        .fillna(0)
+                        .sum()
+                    ) if not calc_df.empty else 0.0
+                
+                    st.metric(
+                        label="Total Reel Stock Value (₹)",
+                        value=f"{total_stock_value:,.2f}"
+                    )
+                
+                with h4:
+                    ca, cb = st.columns(2)
+                    with ca:
+                        if st.button("➕ Add 2 Sample Reels", use_container_width=True):
+                            insert_two_sample_reels()
+                            st.rerun()
+                    with cb:
+                        grouped = st.toggle(
+                            "Group columns",
+                            value=True,
+                            help="Show grouped headers for readability."
+                        )
 
         # ---------------- Filters ----------------
         st.markdown("#### Filters")
