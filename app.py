@@ -1160,17 +1160,17 @@ def show_raw_materials():
         .sum()
     )
 
-    with h2:
-    st.metric(
-        label="Total Stock (Kg)",
-        value=f"{total_closing_kg:,.2f}"
-    )
-
-    with h3:
-    st.metric(
-        label="Total Stock Value (₹)",
-        value=f"₹ {total_stock_value:,.2f}"
-    )
+        with h2:
+        st.metric(
+            label="Total Stock (Kg)",
+            value=f"{total_closing_kg:,.2f}"
+        )
+    
+        with h3:
+        st.metric(
+            label="Total Stock Value (₹)",
+            value=f"₹ {total_stock_value:,.2f}"
+        )
 
 
     # -------------------------------------------------
