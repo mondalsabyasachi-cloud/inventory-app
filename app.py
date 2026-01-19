@@ -1252,7 +1252,7 @@ def show_raw_materials():
     if q_gsm > 0:
         df_f = df_f[pd.to_numeric(df_f["GSM"], errors="coerce") == q_gsm]
     if q_deckle > 0:
-        df_f = pd.to_numeric(df_f["Deckle in cm"], errors="coerce").round(1) == round(q_deckle, 1)]
+        df_f = df_f[pd.to_numeric(df_f["Deckle in cm"], errors="coerce").round(1) == round(q_deckle, 1)]
 
     # -------------------------------------------------
     # Display table
