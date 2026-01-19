@@ -1102,204 +1102,204 @@ def show_raw_materials():
     # PAPER REELS
     # ===============================
     if rm_type == "Paper Reel":
-        # ---------------- Paper Reels Header + KPIs ----------------
-                h1, h2, h3, h4 = st.columns([2.5, 1.2, 1.2, 2])
+                        # ---------------- Paper Reels Header + KPIs ----------------
+                                h1, h2, h3, h4 = st.columns([2.5, 1.2, 1.2, 2])
+                                
+                                with h1:
+                                    st.markdown("### 📜 Paper Reels")
+                                
+                                with h2:
+                                    total_closing_kg = float(
+                                        pd.to_numeric(calc_df["Closing Stock till date"], errors="coerce")
+                                        .fillna(0)
+                                        .sum()
+                                    ) if not calc_df.empty else 0.0
+                                
+                                    st.metric(
+                                        label="Total Closing Stock (Kg)",
+                                        value=f"{total_closing_kg:,.2f}"
+                                    )
+                                
+                                with h3:
+                                    total_stock_value = float(
+                                        pd.to_numeric(calc_df["Current Stock Value(INR)"], errors="coerce")
+                                        .fillna(0)
+                                        .sum()
+                                    ) if not calc_df.empty else 0.0
+                                
+                                    st.metric(
+                                        label="Total Reel Stock Value (₹)",
+                                        value=f"{total_stock_value:,.2f}"
+                                    )
+                                
+                                with h4:
+                                    ca, cb = st.columns(2)
+                                    with ca:
+                                        if st.button("➕ Add 2 Sample Reels", use_container_width=True):
+                                            insert_two_sample_reels()
+                                            st.rerun()
+                                    with cb:
+                                        grouped = st.toggle(
+                                            "Group columns",
+                                            value=True,
+                                            help="Show grouped headers for readability."
+                                        )
                 
-                with h1:
-                    st.markdown("### 📜 Paper Reels")
+                        # ---------------- Filters ----------------
+                        st.markdown("#### Filters")
+                        f1, f2, f3, f4 = st.columns([1.5, 1.5, 1, 1])
                 
-                with h2:
-                    total_closing_kg = float(
-                        pd.to_numeric(calc_df["Closing Stock till date"], errors="coerce")
-                        .fillna(0)
-                        .sum()
-                    ) if not calc_df.empty else 0.0
+                        with f1:
+                            q_reel = st.text_input("Reel No contains", "").strip()
+                        with f2:
+                            q_supplier = st.text_input("Supplier contains", "").strip()
+                        with f3:
+                            q_from = st.date_input("Recv From", value=None)
+                        with f4:
+                            q_to = st.date_input("Recv To", value=None)
                 
-                    st.metric(
-                        label="Total Closing Stock (Kg)",
-                        value=f"{total_closing_kg:,.2f}"
-                    )
+                        # ---------------- Fetch + compute ----------------
+                        base_df = fetch_reel_grid()
+                        calc_df = build_paper_grid_with_calcs(base_df)
                 
-                with h3:
-                    total_stock_value = float(
-                        pd.to_numeric(calc_df["Current Stock Value(INR)"], errors="coerce")
-                        .fillna(0)
-                        .sum()
-                    ) if not calc_df.empty else 0.0
+                        df_f = calc_df.copy()
+                        if q_reel:
+                            df_f = df_f[df_f["Reel No"].str.contains(q_reel, case=False, na=False)]
+                        if q_supplier and "Reel Supplier" in df_f.columns:
+                            df_f = df_f[df_f["Reel Supplier"].str.contains(q_supplier, case=False, na=False)]
+                        if q_from:
+                            s = pd.to_datetime(df_f["Material Rcv Dt."], errors="coerce")
+                            df_f = df_f[s.dt.date >= q_from]
+                        if q_to:
+                            s = pd.to_datetime(df_f["Material Rcv Dt."], errors="coerce")
+                            df_f = df_f[s.dt.date <= q_to]
                 
-                    st.metric(
-                        label="Total Reel Stock Value (₹)",
-                        value=f"{total_stock_value:,.2f}"
-                    )
+                        # ---------------- KPI: Total Reel Stock Value ----------------
+                        if not df_f.empty and "Current Stock Value(INR)" in df_f.columns:
+                            total_value = (
+                                pd.to_numeric(df_f["Current Stock Value(INR)"], errors="coerce")
+                                .fillna(0)
+                                .sum()
+                            )
+                        else:
+                            total_value = 0.0
                 
-                with h4:
-                    ca, cb = st.columns(2)
-                    with ca:
-                        if st.button("➕ Add 2 Sample Reels", use_container_width=True):
-                            insert_two_sample_reels()
-                            st.rerun()
-                    with cb:
-                        grouped = st.toggle(
-                            "Group columns",
-                            value=True,
-                            help="Show grouped headers for readability."
+                        st.markdown(
+                            f"""
+                            <div class="metric-card" style="border-left:6px solid {ACCENT_RM}">
+                                <div class="metric-title">Total Reel Stock Value</div>
+                                <div class="metric-value">₹ {total_value:,.2f}</div>
+                                <div class="metric-sub">Based on current closing stock</div>
+                            </div>
+                            """,
+                            unsafe_allow_html=True
                         )
-
-        # ---------------- Filters ----------------
-        st.markdown("#### Filters")
-        f1, f2, f3, f4 = st.columns([1.5, 1.5, 1, 1])
-
-        with f1:
-            q_reel = st.text_input("Reel No contains", "").strip()
-        with f2:
-            q_supplier = st.text_input("Supplier contains", "").strip()
-        with f3:
-            q_from = st.date_input("Recv From", value=None)
-        with f4:
-            q_to = st.date_input("Recv To", value=None)
-
-        # ---------------- Fetch + compute ----------------
-        base_df = fetch_reel_grid()
-        calc_df = build_paper_grid_with_calcs(base_df)
-
-        df_f = calc_df.copy()
-        if q_reel:
-            df_f = df_f[df_f["Reel No"].str.contains(q_reel, case=False, na=False)]
-        if q_supplier and "Reel Supplier" in df_f.columns:
-            df_f = df_f[df_f["Reel Supplier"].str.contains(q_supplier, case=False, na=False)]
-        if q_from:
-            s = pd.to_datetime(df_f["Material Rcv Dt."], errors="coerce")
-            df_f = df_f[s.dt.date >= q_from]
-        if q_to:
-            s = pd.to_datetime(df_f["Material Rcv Dt."], errors="coerce")
-            df_f = df_f[s.dt.date <= q_to]
-
-        # ---------------- KPI: Total Reel Stock Value ----------------
-        if not df_f.empty and "Current Stock Value(INR)" in df_f.columns:
-            total_value = (
-                pd.to_numeric(df_f["Current Stock Value(INR)"], errors="coerce")
-                .fillna(0)
-                .sum()
-            )
-        else:
-            total_value = 0.0
-
-        st.markdown(
-            f"""
-            <div class="metric-card" style="border-left:6px solid {ACCENT_RM}">
-                <div class="metric-title">Total Reel Stock Value</div>
-                <div class="metric-value">₹ {total_value:,.2f}</div>
-                <div class="metric-sub">Based on current closing stock</div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-        # ---------------- Main Table ----------------
-        st.markdown("#### Inventory")
-
-        display_df = group_columns_multiindex(df_f) if grouped else df_f
-
-        def highlight_reorder(row):
-            try:
-                if isinstance(row.index, pd.MultiIndex):
-                    closing = row[("Stock & Consumption", "Closing Stock till date")]
-                    reorder = row[("Stock & Consumption", "Reorder Level")]
-                else:
-                    closing = row["Closing Stock till date"]
-                    reorder = row["Reorder Level"]
-                if float(closing) <= float(reorder):
-                    return ["background-color: #fff4f2"] * len(row)
-            except Exception:
-                pass
-            return [""] * len(row)
-
-        st.dataframe(
-            display_df.style.apply(highlight_reorder, axis=1)
-            if len(display_df) else display_df,
-            use_container_width=True,
-            hide_index=True
-        )
-
-        # ---------------- Edit / Delete ----------------
-        with st.expander("✏️ Edit / Delete rows (single or bulk)", expanded=False):
-
-            st.caption(
-                "Note: The edit table below intentionally shows only editable fields. "
-                "Computed, stock, and reference columns are hidden to ensure data integrity."
-            )
-
-            edit_df = build_paper_edit_df(df_f)
-
-            if "paper_edit_orig" not in st.session_state:
-                st.session_state.paper_edit_orig = edit_df.copy(deep=True)
-            if "paper_edit_df" not in st.session_state:
-                st.session_state.paper_edit_df = edit_df.copy(deep=True)
-
-            edited = st.data_editor(
-                st.session_state.paper_edit_df,
-                use_container_width=True,
-                column_config={
-                    "Select": st.column_config.CheckboxColumn(required=False)
-                },
-                key="paper_editor"
-            )
-            st.session_state.paper_edit_df = edited
-
-            c1, c2, c3 = st.columns([1, 1, 2])
-            with c1:
-                if st.button("💾 Save changes", type="primary", use_container_width=True):
-                    n = save_paper_edits(
-                        st.session_state.paper_edit_orig,
-                        st.session_state.paper_edit_df
+                
+                        # ---------------- Main Table ----------------
+                        st.markdown("#### Inventory")
+                
+                        display_df = group_columns_multiindex(df_f) if grouped else df_f
+                
+                        def highlight_reorder(row):
+                            try:
+                                if isinstance(row.index, pd.MultiIndex):
+                                    closing = row[("Stock & Consumption", "Closing Stock till date")]
+                                    reorder = row[("Stock & Consumption", "Reorder Level")]
+                                else:
+                                    closing = row["Closing Stock till date"]
+                                    reorder = row["Reorder Level"]
+                                if float(closing) <= float(reorder):
+                                    return ["background-color: #fff4f2"] * len(row)
+                            except Exception:
+                                pass
+                            return [""] * len(row)
+                
+                        st.dataframe(
+                            display_df.style.apply(highlight_reorder, axis=1)
+                            if len(display_df) else display_df,
+                            use_container_width=True,
+                            hide_index=True
+                        )
+                
+                        # ---------------- Edit / Delete ----------------
+                        with st.expander("✏️ Edit / Delete rows (single or bulk)", expanded=False):
+                
+                            st.caption(
+                                "Note: The edit table below intentionally shows only editable fields. "
+                                "Computed, stock, and reference columns are hidden to ensure data integrity."
+                            )
+                
+                            edit_df = build_paper_edit_df(df_f)
+                
+                            if "paper_edit_orig" not in st.session_state:
+                                st.session_state.paper_edit_orig = edit_df.copy(deep=True)
+                            if "paper_edit_df" not in st.session_state:
+                                st.session_state.paper_edit_df = edit_df.copy(deep=True)
+                
+                            edited = st.data_editor(
+                                st.session_state.paper_edit_df,
+                                use_container_width=True,
+                                column_config={
+                                    "Select": st.column_config.CheckboxColumn(required=False)
+                                },
+                                key="paper_editor"
+                            )
+                            st.session_state.paper_edit_df = edited
+                
+                            c1, c2, c3 = st.columns([1, 1, 2])
+                            with c1:
+                                if st.button("💾 Save changes", type="primary", use_container_width=True):
+                                    n = save_paper_edits(
+                                        st.session_state.paper_edit_orig,
+                                        st.session_state.paper_edit_df
+                                    )
+                                    st.success(f"Saved {n} row(s).")
+                                    st.session_state.pop("paper_edit_orig", None)
+                                    st.session_state.pop("paper_edit_df", None)
+                                    st.rerun()
+                
+                            with c2:
+                                if st.button("🗑 Delete selected", use_container_width=True):
+                                    to_delete = (
+                                        edited[edited["Select"] == True]["Reel No"]
+                                        .dropna()
+                                        .astype(str)
+                                        .tolist()
+                                    )
+                                    n = delete_paper_rows_by_reel_nos(to_delete)
+                                    st.warning(f"Deleted {n} row(s).")
+                                    st.session_state.pop("paper_edit_orig", None)
+                                    st.session_state.pop("paper_edit_df", None)
+                                    st.rerun()
+                
+                            with c3:
+                                if st.button("↻ Reload table", use_container_width=True):
+                                    st.session_state.pop("paper_edit_orig", None)
+                                    st.session_state.pop("paper_edit_df", None)
+                                    st.rerun()
+                
+                        # ---------------- Upload Excel ----------------
+                        with st.expander("⬆ Upload Paper Reels from Excel (.xlsx / .csv)", expanded=False):
+                            rm_upload_excel_ui()
+                
+                        # ---------------- Forms ----------------
+                        tabs = st.tabs(["📥 Receive", "📤 Issue", "🔁 Transfer / Adjust"])
+                        with tabs[0]:
+                            rm_receive_form()
+                        with tabs[1]:
+                            rm_issue_form()
+                        with tabs[2]:
+                            rm_transfer_adjust_form()
+                
+                        return  # END Paper Reels
+                
+                    # ===============================
+                    # OTHER RAW MATERIALS (placeholder)
+                    # ===============================
+                    st.info(
+                        f"The **{rm_type}** module is not implemented yet. "
+                        "It will follow the same structure as Paper Reels."
                     )
-                    st.success(f"Saved {n} row(s).")
-                    st.session_state.pop("paper_edit_orig", None)
-                    st.session_state.pop("paper_edit_df", None)
-                    st.rerun()
-
-            with c2:
-                if st.button("🗑 Delete selected", use_container_width=True):
-                    to_delete = (
-                        edited[edited["Select"] == True]["Reel No"]
-                        .dropna()
-                        .astype(str)
-                        .tolist()
-                    )
-                    n = delete_paper_rows_by_reel_nos(to_delete)
-                    st.warning(f"Deleted {n} row(s).")
-                    st.session_state.pop("paper_edit_orig", None)
-                    st.session_state.pop("paper_edit_df", None)
-                    st.rerun()
-
-            with c3:
-                if st.button("↻ Reload table", use_container_width=True):
-                    st.session_state.pop("paper_edit_orig", None)
-                    st.session_state.pop("paper_edit_df", None)
-                    st.rerun()
-
-        # ---------------- Upload Excel ----------------
-        with st.expander("⬆ Upload Paper Reels from Excel (.xlsx / .csv)", expanded=False):
-            rm_upload_excel_ui()
-
-        # ---------------- Forms ----------------
-        tabs = st.tabs(["📥 Receive", "📤 Issue", "🔁 Transfer / Adjust"])
-        with tabs[0]:
-            rm_receive_form()
-        with tabs[1]:
-            rm_issue_form()
-        with tabs[2]:
-            rm_transfer_adjust_form()
-
-        return  # END Paper Reels
-
-    # ===============================
-    # OTHER RAW MATERIALS (placeholder)
-    # ===============================
-    st.info(
-        f"The **{rm_type}** module is not implemented yet. "
-        "It will follow the same structure as Paper Reels."
-    )
 
 
 # -------------------------
