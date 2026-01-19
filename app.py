@@ -4,6 +4,7 @@
 # Prepared for: Saby Mondal | Packsmart India Pvt Ltd
 # ------------------------------------------------------------
 
+from core.db import get_conn as shared_get_conn
 from io import BytesIO
 import os
 import sqlite3
