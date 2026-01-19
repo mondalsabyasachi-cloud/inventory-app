@@ -1235,6 +1235,25 @@ def show_raw_materials():
         st.caption("Tip: Use column filters and the inbuilt download to export.")
 
         display_df = group_columns_multiindex(df_f) if grouped else df_f
+    # ================= KPI: TOTAL PAPER REEL STOCK =================
+    total_stock_kg = 0.0
+    total_stock_value = 0.0
+
+    if not display_df.empty:
+    if "Closing Stock till date" in display_df.columns:
+        total_stock_kg = (
+            pd.to_numeric(display_df["Closing Stock till date"], errors="coerce")
+            .fillna(0)
+            .sum()
+        )
+
+    if "Current Stock Value(INR)" in display_df.columns:
+        total_stock_value = (
+            pd.to_numeric(display_df["Current Stock Value(INR)"], errors="coerce")
+            .fillna(0)
+            .sum()
+        )
+# ===============================================================
 
         def highlight_reorder(row):
             try:
@@ -1249,6 +1268,24 @@ def show_raw_materials():
             except Exception:
                 pass
             return [""] * len(row)
+
+        k1, k2 = st.columns(2)
+
+        with k1:
+            st.markdown("**Total Stock (Kg)**")
+            st.markdown(
+                f"<div style='font-size:18px'>{total_stock_kg:,.2f}</div>",
+                unsafe_allow_html=True
+             )
+
+        with k2:
+            st.markdown("**Total Stock Value (₹)**")
+            st.markdown(
+                f"<div style='font-size:18px'>₹ {total_stock_value:,.2f}</div>",
+                unsafe_allow_html=True
+            )
+
+st.markdown("---")
 
         st.dataframe(
             display_df.style.apply(highlight_reorder, axis=1)
