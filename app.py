@@ -1107,6 +1107,8 @@ def rm_transfer_adjust_form():
                     VALUES(?,?,?,?,?)
                 """, (rid, datetime.now().isoformat(), "Release", 0.0, refdoc))
         st.success(f"{action} recorded for **{chosen}**.")
+
+
 def show_raw_materials():
     st.subheader("Raw Materials")
 
@@ -1241,121 +1243,6 @@ def show_raw_materials():
             hide_index=True
         )
 
-# ===============================================================
-
-        def highlight_reorder(row):
-            try:
-                if isinstance(row.index, pd.MultiIndex):
-                    closing = row[("Stock & Consumption", "Closing Stock till date")]
-                    reorder = row[("Stock & Consumption", "Reorder Level")]
-                else:
-                    closing = row["Closing Stock till date"]
-                    reorder = row["Reorder Level"]
-                if float(closing) <= float(reorder):
-                    return ["background-color: #fff4f2"] * len(row)
-            except Exception:
-                pass
-            return [""] * len(row)
-
-        k1, k2 = st.columns(2)
-
-        with k1:
-            st.markdown("**Total Stock (Kg)**")
-            st.markdown(
-                f"<div style='font-size:18px'>{total_stock_kg:,.2f}</div>",
-                unsafe_allow_html=True
-             )
-
-        with k2:
-            st.markdown("**Total Stock Value (₹)**")
-            st.markdown(
-                f"<div style='font-size:18px'>₹ {total_stock_value:,.2f}</div>",
-                unsafe_allow_html=True
-            )
-
-st.markdown("---")
-
-        st.dataframe(
-            display_df.style.apply(highlight_reorder, axis=1)
-            if len(display_df)
-            else display_df,
-            use_container_width=True,
-            hide_index=True
-        )
-
-    # -------------------------------------------------
-    # Edit / Delete
-    # -------------------------------------------------
-    with st.expander("✏️ Edit / Delete rows (single or bulk)", expanded=False):
-        edit_df = build_paper_edit_df(df_f)
-
-        if "Select" not in edit_df.columns:
-            edit_df.insert(0, "Select", False)
-
-        DATE_COLS = [
-            "Material Rcv Dt.",
-            "Maker's/Supplier's Inv Dt.",
-            "Consume Dt",
-            "Consumption Entry Date",
-            "Reel Shifting Date",
-        ]
-
-        for c in DATE_COLS:
-            if c in edit_df.columns:
-                edit_df[c] = pd.to_datetime(edit_df[c], errors="coerce").dt.date
-
-        if "paper_edit_orig" not in st.session_state:
-            st.session_state.paper_edit_orig = edit_df.copy(deep=True)
-
-        edited = st.data_editor(
-            edit_df,
-            use_container_width=True,
-            key="paper_editor",
-            column_config={"Select": st.column_config.CheckboxColumn(required=False)},
-        )
-
-        c1, c2, c3 = st.columns([1, 1, 2])
-
-        with c1:
-            if st.button("💾 Save changes", type="primary", use_container_width=True):
-                n = save_paper_edits(st.session_state.paper_edit_orig, edited)
-                st.success(f"Saved {n} row(s).")
-                st.session_state.pop("paper_edit_orig", None)
-                st.rerun()
-
-        with c2:
-            if st.button("🗑 Delete selected", use_container_width=True):
-                to_delete = (
-                    edited[edited["Select"] == True]["Reel No"]
-                    .dropna()
-                    .astype(str)
-                    .tolist()
-                )
-                n = delete_paper_rows_by_reel_nos(to_delete)
-                st.warning(f"Deleted {n} row(s)." if n else "No rows selected.")
-                st.session_state.pop("paper_edit_orig", None)
-                st.rerun()
-
-        with c3:
-            if st.button("↻ Reload table", use_container_width=True):
-                st.session_state.pop("paper_edit_orig", None)
-                st.rerun()
-
-    # -------------------------------------------------
-    # Upload + Forms
-    # -------------------------------------------------
-    with st.expander("⬆ Upload Paper Reels from Excel (.xlsx)", expanded=False):
-        rm_upload_excel_ui()
-
-    tabs = st.tabs(["📥 Receive", "📤 Issue", "🔁 Transfer / Adjust"])
-    with tabs[0]:
-        rm_receive_form()
-    with tabs[1]:
-        rm_issue_form()
-    with tabs[2]:
-        rm_transfer_adjust_form()
-
-    return
 
 # -------------------------
 # WIP
