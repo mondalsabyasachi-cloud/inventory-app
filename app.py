@@ -59,8 +59,29 @@ st.markdown(f"""
     .metric-sub {{ font-size: 0.8rem; color: #6b7280; }}
     .stTabs [data-baseweb="tab-list"] {{ gap: 8px; }}
     .stTabs [data-baseweb="tab"] {{ padding-top: 8px; padding-bottom: 8px; }}
+
+    /* -------- ERP-style inline KPIs -------- */
+    .erp-kpi {{
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 8px 12px;
+        background: #ffffff;
+        height: 58px;
+    }}
+    .erp-kpi-label {{
+        font-size: 12px;
+        color: #6b7280;
+        line-height: 1.1;
+    }}
+    .erp-kpi-value {{
+        font-size: 18px;
+        font-weight: 600;
+        color: #111827;
+        white-space: nowrap;
+    }}
 </style>
 """, unsafe_allow_html=True)
+
 
 # -------------------------
 # NAVIGATION: process any pending nav BEFORE rendering sidebar
