@@ -457,7 +457,25 @@ def build_paper_grid_with_calcs(raw_df: pd.DataFrame) -> pd.DataFrame:
     df = raw_df.copy()
     # Apply Opening Stock carry-forward logic
     df = apply_opening_stock_logic(df)
+    # -------------------------
+    # STEP-4A: Closing Stock Till Date (Kg)
+    # -------------------------
+    df["Closing Stock till date"] = 0.0
 
+    for idx, row in df.iterrows():
+        opening = float(row.get("Opening Stk Till Date", 0) or 0)
+        consumed = float(row.get("Consumed Wt", 0) or 0)
+
+        # Repeat usage case → Opening exists
+        if opening > 0:
+            closing = opening - consumed
+        else:
+            # First receipt case
+            weight = float(row.get("Weight (Kg)", 0) or 0)
+            closing = weight - consumed
+
+        df.at[idx, "Closing Stock till date"] = round(closing, 3)
+    
     
     # Reel Holding Time (Days): ensure present
     if "Material Rcv Dt." in df.columns and "Reel Holding Time (Days)" not in df.columns:
