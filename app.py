@@ -1121,6 +1121,22 @@ def show_raw_materials():
     if rm_type != "Paper Reel":
         st.info("Only Paper Reel is enabled currently.")
         return
+    # ---------- KPI Calculations ----------
+    total_stock_kg = 0.0
+    total_stock_value = 0.0
+
+    if not df_f.empty:
+        total_stock_kg = (
+            pd.to_numeric(df_f["Closing Stock till date"], errors="coerce")
+            .fillna(0)
+            .sum()
+        )
+
+    total_stock_value = (
+        pd.to_numeric(df_f["Current Stock Value(INR)"], errors="coerce")
+        .fillna(0)
+        .sum()
+    )
 
     # -------------------------------------------------
     # Paper Reels header + actions + KPIs (same row)
