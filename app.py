@@ -1278,19 +1278,7 @@ with st.expander("✏️ Edit / Delete rows (single or bulk)", expanded=False):
         return  # end Paper Reels
 
 
-    # ---------- PLACEHOLDERS for other RM types ----------
-    st.markdown(f"### {rm_type}")
-    st.info(
-        f"The **{rm_type}** inventory screen is a placeholder for now. "
-        f"You can plug in your own grid and forms here. "
-        "If you want, I can scaffold the DB tables and UI like Paper Reels."
-    )
-    with st.expander("Suggested fields & actions", expanded=True):
-        st.markdown(
-            "- Define specs, commercial fields, stock fields, and QA needs for this material type\n"
-            "- **Receive / Issue / Transfer / Adjust**"
-        )
-
+ 
 # -------------------------
 # WIP
 # -------------------------
