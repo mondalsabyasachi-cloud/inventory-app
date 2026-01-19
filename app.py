@@ -1273,7 +1273,8 @@ def show_raw_materials():
     # BULK EDIT / DELETE (Paper Reels)
     # -------------------------------------------------
     st.markdown("## ✏️ Bulk Edit / Delete (Paper Reels)")
-
+    st.caption("✔ Edit cells to update values • ✔ Tick checkbox to delete entire reel(s)")
+    
     edit_df = build_paper_edit_df(calc_df)
 
     if edit_df.empty:
@@ -1285,6 +1286,16 @@ def show_raw_materials():
             hide_index=True,
             num_rows="fixed",
             key="paper_bulk_editor"
+            column_config={
+                "Select": st.column_config.CheckboxColumn(
+                    "Delete",
+                    help="Tick to delete entire reel row"
+                )
+            },
+            disabled=[
+                "Reel No",                 # primary identifier
+                "Deckle in Inch"           # computed
+            ]
         )
 
         b1, b2 = st.columns(2)
@@ -1298,8 +1309,15 @@ def show_raw_materials():
                 else:
                     st.info("No changes detected.")
 
+        # ----------------------------
+        # DELETE ROWS
+        # ----------------------------
+
         with b2:
-            to_delete = edited.loc[edited["Select"] == True, "Reel No"].tolist()
+            to_delete = (edited.loc[edited["Select"] == True, "Reel No"]
+                         .dropna()
+                         .tolist()
+                        )
 
             if st.button("🗑 Delete Selected Reels", type="secondary"):
                 if not to_delete:
