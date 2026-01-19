@@ -59,29 +59,8 @@ st.markdown(f"""
     .metric-sub {{ font-size: 0.8rem; color: #6b7280; }}
     .stTabs [data-baseweb="tab-list"] {{ gap: 8px; }}
     .stTabs [data-baseweb="tab"] {{ padding-top: 8px; padding-bottom: 8px; }}
-
-    /* -------- ERP-style inline KPIs -------- */
-    .erp-kpi {{
-        background: #ffffff;
-        border: 1px solid #e6e9ef;
-        border-radius: 10px;
-        padding: 8px 12px;
-        white-space: nowrap;
-    }}
-    .erp-kpi-label {{
-        font-size: 0.75rem;
-        color: #6b7280;
-    }}
-    .erp-kpi-value {{
-        font-size: 1.15rem;        
-        font-weight: 600;
-        color: #111827;
-        overflow: visible;          
-        text-overflow: clip;        
-    }}
 </style>
 """, unsafe_allow_html=True)
-
 
 # -------------------------
 # NAVIGATION: process any pending nav BEFORE rendering sidebar
@@ -1107,37 +1086,26 @@ def rm_transfer_adjust_form():
                     VALUES(?,?,?,?,?)
                 """, (rid, datetime.now().isoformat(), "Release", 0.0, refdoc))
         st.success(f"{action} recorded for **{chosen}**.")
-
-
 def show_raw_materials():
+    # 1) RM Type selector
     st.subheader("Raw Materials")
+    st.markdown("#### Select Raw Material Type")
 
     rm_type = st.selectbox(
         "Raw Material Type",
         options=RM_TYPES,
         index=0,
-        key="rm_type_selector"
+        key="rm_type_selector",
     )
 
-    if rm_type != "Paper Reel":
-        st.info("Only Paper Reel is enabled currently.")
-        return
+    # ===============================
+    # PAPER REELS
+    # ===============================
+    if rm_type == "Paper Reel":
+        st.markdown("### 📜 Paper Reels")
 
-    # -------------------------------------------------
-    # Fetch & compute data ONCE
-    # -------------------------------------------------
-    base_df = fetch_reel_grid()
-    calc_df = build_paper_grid_with_calcs(base_df)
-
-    # -------------------------------------------------
-    # Header + actions + KPIs
-    # -------------------------------------------------
-    st.markdown("### 📜 Paper Reels")
-
-    h1, h2, h3, h4 = st.columns([1.8, 1.2, 1.5, 1.5])
-
-    with h1:
-        ca, cb = st.columns(2)
+        # Quick actions
+        ca, cb, cc = st.columns([1, 1, 2])
         with ca:
             if st.button("➕ Add 2 Sample Reels", use_container_width=True):
                 insert_two_sample_reels()
@@ -1146,102 +1114,166 @@ def show_raw_materials():
             grouped = st.toggle(
                 "Group columns",
                 value=True,
-                help="Show grouped headers for readability."
+                help="Show grouped headers for readability"
             )
-
-    # KPI calculations (GLOBAL, before filters)
-    total_stock_kg = (
-        pd.to_numeric(calc_df["Closing Stock till date"], errors="coerce")
-        .fillna(0)
-        .sum()
-    ) if not calc_df.empty else 0.0
-
-    total_stock_value = (
-        pd.to_numeric(calc_df["Current Stock Value(INR)"], errors="coerce")
-        .fillna(0)
-        .sum()
-    ) if not calc_df.empty else 0.0
-
-    with h2:
-        st.markdown(
-            f"""
-            <div class="erp-kpi">
-                <div class="erp-kpi-label">Total Stock (Kg)</div>
-                <div class="erp-kpi-value">{total_stock_kg:,.2f}</div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-    with h3:
-        st.markdown(
-            f"""
-            <div class="erp-kpi">
-                <div class="erp-kpi-label">Total Stock Value (₹)</div>
-                <div class="erp-kpi-value">₹ {total_stock_value:,.2f}</div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-    # -------------------------------------------------
-    # Filters
-    # -------------------------------------------------
-    st.markdown("#### Filters")
-
-    f1, f2, f3, f4 = st.columns([1.5, 1.5, 1, 1])
-
-    with f1:
-        q_reel = st.text_input("Reel No contains", "").strip()
-    with f2:
-        q_supplier = st.text_input("Supplier contains", "").strip()
-    with f3:
-        q_from = st.date_input("Recv From", value=None)
-    with f4:
-        q_to = st.date_input("Recv To", value=None)
-
-    df_f = calc_df.copy()
-
-    if q_reel:
-        df_f = df_f[df_f["Reel No"].str.contains(q_reel, case=False, na=False)]
-    if q_supplier:
-        df_f = df_f[df_f["Reel Supplier"].str.contains(q_supplier, case=False, na=False)]
-    if q_from:
-        s = pd.to_datetime(df_f["Material Rcv Dt."], errors="coerce")
-        df_f = df_f[s.dt.date >= q_from]
-    if q_to:
-        s = pd.to_datetime(df_f["Material Rcv Dt."], errors="coerce")
-        df_f = df_f[s.dt.date <= q_to]
-
-    # -------------------------------------------------
-    # Display table
-    # -------------------------------------------------
-    def highlight_reorder(row):
-        try:
-            if isinstance(row.index, pd.MultiIndex):
-                closing = row[("Stock & Consumption", "Closing Stock till date")]
-                reorder = row[("Stock & Consumption", "Reorder Level")]
-            else:
-                closing = row["Closing Stock till date"]
-                reorder = row["Reorder Level"]
-            if float(closing) <= float(reorder):
-                return ["background-color: #fff4f2"] * len(row)
-        except Exception:
+        with cc:
             pass
-        return [""] * len(row)
 
-    with st.container(border=True):
-        st.caption("Tip: Use column filters and the inbuilt download to export.")
+        # ---------------- Filters ----------------
+        st.markdown("#### Filters")
+        f1, f2, f3, f4 = st.columns([1.5, 1.5, 1, 1])
+
+        with f1:
+            q_reel = st.text_input("Reel No contains", "").strip()
+        with f2:
+            q_supplier = st.text_input("Supplier contains", "").strip()
+        with f3:
+            q_from = st.date_input("Recv From", value=None)
+        with f4:
+            q_to = st.date_input("Recv To", value=None)
+
+        # ---------------- Fetch + compute ----------------
+        base_df = fetch_reel_grid()
+        calc_df = build_paper_grid_with_calcs(base_df)
+
+        df_f = calc_df.copy()
+        if q_reel:
+            df_f = df_f[df_f["Reel No"].str.contains(q_reel, case=False, na=False)]
+        if q_supplier and "Reel Supplier" in df_f.columns:
+            df_f = df_f[df_f["Reel Supplier"].str.contains(q_supplier, case=False, na=False)]
+        if q_from:
+            s = pd.to_datetime(df_f["Material Rcv Dt."], errors="coerce")
+            df_f = df_f[s.dt.date >= q_from]
+        if q_to:
+            s = pd.to_datetime(df_f["Material Rcv Dt."], errors="coerce")
+            df_f = df_f[s.dt.date <= q_to]
+
+        # ---------------- KPI: Total Reel Stock Value ----------------
+        if not df_f.empty and "Current Stock Value(INR)" in df_f.columns:
+            total_value = (
+                pd.to_numeric(df_f["Current Stock Value(INR)"], errors="coerce")
+                .fillna(0)
+                .sum()
+            )
+        else:
+            total_value = 0.0
+
+        st.markdown(
+            f"""
+            <div class="metric-card" style="border-left:6px solid {ACCENT_RM}">
+                <div class="metric-title">Total Reel Stock Value</div>
+                <div class="metric-value">₹ {total_value:,.2f}</div>
+                <div class="metric-sub">Based on current closing stock</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        # ---------------- Main Table ----------------
+        st.markdown("#### Inventory")
 
         display_df = group_columns_multiindex(df_f) if grouped else df_f
 
+        def highlight_reorder(row):
+            try:
+                if isinstance(row.index, pd.MultiIndex):
+                    closing = row[("Stock & Consumption", "Closing Stock till date")]
+                    reorder = row[("Stock & Consumption", "Reorder Level")]
+                else:
+                    closing = row["Closing Stock till date"]
+                    reorder = row["Reorder Level"]
+                if float(closing) <= float(reorder):
+                    return ["background-color: #fff4f2"] * len(row)
+            except Exception:
+                pass
+            return [""] * len(row)
+
         st.dataframe(
             display_df.style.apply(highlight_reorder, axis=1)
-            if len(display_df)
-            else display_df,
+            if len(display_df) else display_df,
             use_container_width=True,
             hide_index=True
         )
+
+        # ---------------- Edit / Delete ----------------
+        with st.expander("✏️ Edit / Delete rows (single or bulk)", expanded=False):
+
+            st.caption(
+                "Note: The edit table below intentionally shows only editable fields. "
+                "Computed, stock, and reference columns are hidden to ensure data integrity."
+            )
+
+            edit_df = build_paper_edit_df(df_f)
+
+            if "paper_edit_orig" not in st.session_state:
+                st.session_state.paper_edit_orig = edit_df.copy(deep=True)
+            if "paper_edit_df" not in st.session_state:
+                st.session_state.paper_edit_df = edit_df.copy(deep=True)
+
+            edited = st.data_editor(
+                st.session_state.paper_edit_df,
+                use_container_width=True,
+                column_config={
+                    "Select": st.column_config.CheckboxColumn(required=False)
+                },
+                key="paper_editor"
+            )
+            st.session_state.paper_edit_df = edited
+
+            c1, c2, c3 = st.columns([1, 1, 2])
+            with c1:
+                if st.button("💾 Save changes", type="primary", use_container_width=True):
+                    n = save_paper_edits(
+                        st.session_state.paper_edit_orig,
+                        st.session_state.paper_edit_df
+                    )
+                    st.success(f"Saved {n} row(s).")
+                    st.session_state.pop("paper_edit_orig", None)
+                    st.session_state.pop("paper_edit_df", None)
+                    st.rerun()
+
+            with c2:
+                if st.button("🗑 Delete selected", use_container_width=True):
+                    to_delete = (
+                        edited[edited["Select"] == True]["Reel No"]
+                        .dropna()
+                        .astype(str)
+                        .tolist()
+                    )
+                    n = delete_paper_rows_by_reel_nos(to_delete)
+                    st.warning(f"Deleted {n} row(s).")
+                    st.session_state.pop("paper_edit_orig", None)
+                    st.session_state.pop("paper_edit_df", None)
+                    st.rerun()
+
+            with c3:
+                if st.button("↻ Reload table", use_container_width=True):
+                    st.session_state.pop("paper_edit_orig", None)
+                    st.session_state.pop("paper_edit_df", None)
+                    st.rerun()
+
+        # ---------------- Upload Excel ----------------
+        with st.expander("⬆ Upload Paper Reels from Excel (.xlsx / .csv)", expanded=False):
+            rm_upload_excel_ui()
+
+        # ---------------- Forms ----------------
+        tabs = st.tabs(["📥 Receive", "📤 Issue", "🔁 Transfer / Adjust"])
+        with tabs[0]:
+            rm_receive_form()
+        with tabs[1]:
+            rm_issue_form()
+        with tabs[2]:
+            rm_transfer_adjust_form()
+
+        return  # END Paper Reels
+
+    # ===============================
+    # OTHER RAW MATERIALS (placeholder)
+    # ===============================
+    st.info(
+        f"The **{rm_type}** module is not implemented yet. "
+        "It will follow the same structure as Paper Reels."
+    )
 
 
 # -------------------------
