@@ -841,7 +841,7 @@ page = st.session_state.left_nav
 # -------------------------
 def show_dashboard():
     col1, col2, col3 = st.columns(3)
-    with get_conn() as conn:
+    with shared_get_conn() as conn:
         rids = pd.read_sql_query("SELECT ReelId FROM PaperReel", conn)
         total_rm_kg, total_reels = 0.0, len(rids)
         for _, r in rids.iterrows():
