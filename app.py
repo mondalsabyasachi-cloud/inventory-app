@@ -62,22 +62,25 @@ st.markdown(f"""
 
     /* -------- ERP-style inline KPIs -------- */
     .erp-kpi {{
-        border: 1px solid #e5e7eb;
-        border-radius: 8px;
-        padding: 8px 12px;
         background: #ffffff;
-        height: 58px;
+        border: 1px solid #e6e9ef;
+        border-radius: 10px;
+        padding: 10px 12px;
+        text-align: left;
+        white-space: nowrap;
     }}
     .erp-kpi-label {{
-        font-size: 12px;
+        font-size: 0.75rem;
         color: #6b7280;
-        line-height: 1.1;
+        margin-bottom: 2px;
     }}
     .erp-kpi-value {{
-        font-size: 18px;
+        font-size: 1.15rem;        
         font-weight: 600;
         color: #111827;
-        white-space: nowrap;
+        line-height: 1.2;
+        overflow: visible;          
+        text-overflow: clip;        
     }}
 </style>
 """, unsafe_allow_html=True)
