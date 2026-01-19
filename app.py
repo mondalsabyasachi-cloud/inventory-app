@@ -1269,6 +1269,45 @@ def show_raw_materials():
             use_container_width=True,
             hide_index=True
         )
+    # -------------------------------------------------
+    # BULK EDIT / DELETE (Paper Reels)
+    # -------------------------------------------------
+    st.markdown("## ✏️ Bulk Edit / Delete (Paper Reels)")
+
+    edit_df = build_paper_edit_df(calc_df)
+
+    if edit_df.empty:
+        st.info("No records available for bulk edit.")
+    else:
+        edited = st.data_editor(
+            edit_df,
+            use_container_width=True,
+            hide_index=True,
+            num_rows="fixed",
+            key="paper_bulk_editor"
+        )
+
+        b1, b2 = st.columns(2)
+
+        with b1:
+            if st.button("💾 Save Selected Changes", type="primary"):
+                changed = save_paper_edits(edit_df, edited)
+                if changed:
+                    st.success(f"{changed} reel(s) updated successfully.")
+                    st.rerun()
+                else:
+                    st.info("No changes detected.")
+
+        with b2:
+            to_delete = edited.loc[edited["Select"] == True, "Reel No"].tolist()
+
+            if st.button("🗑 Delete Selected Reels", type="secondary"):
+                if not to_delete:
+                    st.warning("Select at least one reel to delete.")
+                else:
+                    deleted = delete_paper_rows_by_reel_nos(to_delete)
+                    st.success(f"{deleted} reel(s) deleted.")
+                    st.rerun()
 
     st.markdown("---")
 
