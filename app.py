@@ -65,20 +65,17 @@ st.markdown(f"""
         background: #ffffff;
         border: 1px solid #e6e9ef;
         border-radius: 10px;
-        padding: 10px 12px;
-        text-align: left;
+        padding: 8px 12px;
         white-space: nowrap;
     }}
     .erp-kpi-label {{
         font-size: 0.75rem;
         color: #6b7280;
-        margin-bottom: 2px;
     }}
     .erp-kpi-value {{
         font-size: 1.15rem;        
         font-weight: 600;
         color: #111827;
-        line-height: 1.2;
         overflow: visible;          
         text-overflow: clip;        
     }}
@@ -1130,7 +1127,7 @@ def show_raw_materials():
     # -------------------------------------------------
     st.markdown("### 📜 Paper Reels")
 
-    h1, h2, h3, h4 = st.columns([2.5, 1.2, 1.2, 2])
+    h1, h2, h3, h4 = st.columns([1.6, 1.2, 1.6, 1.6])
 
     with h1:
         ca, cb = st.columns(2)
@@ -1164,15 +1161,25 @@ def show_raw_materials():
     )
 
     with h2:
-        st.metric(
-            label="Total Stock (Kg)",
-            value=f"{total_closing_kg:,.2f}"
+        st.markdown(
+            f"""
+            <div class="erp-kpi">
+                <div class="erp-kpi-label">Total Stock (Kg)</div>
+                <div class="erp-kpi-value">{total_stock_kg:,.2f}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
     
     with h3:
-        st.metric(
-            label="Total Stock Value (₹)",
-            value=f"₹ {total_stock_value:,.2f}"
+        st.markdown(
+            f"""
+            <div class="erp-kpi">
+                <div class="erp-kpi-label">Total Stock Value (₹)</div>
+                <div class="erp-kpi-value">{Total Stock Value:,.2f}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
 
 
