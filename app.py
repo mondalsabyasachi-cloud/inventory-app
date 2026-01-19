@@ -1173,11 +1173,7 @@ def show_raw_materials():
             st.dataframe(...)
 
 # -------- Edit / Delete (C1-B: checkbox + bulk) --------
-            st.caption(
-                "ℹ️ The edit table below intentionally shows only editable fields. "
-                "Computed, stock, and reference columns are hidden to ensure data integrity."
-            )
-
+     
 with st.expander("✏️ Edit / Delete rows (single or bulk)", expanded=False):
 
         
@@ -1283,7 +1279,7 @@ with st.expander("✏️ Edit / Delete rows (single or bulk)", expanded=False):
 
 
     # ---------- PLACEHOLDERS for other RM types ----------
-   st.markdown(f"### {rm_type}")
+    st.markdown(f"### {rm_type}")
     st.info(
         f"The **{rm_type}** inventory screen is a placeholder for now. "
         f"You can plug in your own grid and forms here. "
