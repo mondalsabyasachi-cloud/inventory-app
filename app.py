@@ -689,51 +689,88 @@ def rm_upload_excel_ui():
     st.rerun()
 
 def insert_two_sample_reels():
-    """Adds two sample reels (SAMPLE-PR-1, SAMPLE-PR-2)."""
+    """Adds two sample reels with correct sequential SL numbers and business logic."""
     with get_conn() as conn:
         cur = conn.cursor()
-        cur.execute("SELECT BinId FROM Bin LIMIT 1")
+
+        # -------- Determine next SL No (numeric) --------
+        cur.execute("""
+            SELECT MAX(CAST(SLNo AS INTEGER))
+            FROM PaperReel
+            WHERE SLNo GLOB '[0-9]*'
+        """)
+        r = cur.fetchone()
+        next_sl = int(r[0]) + 1 if r and r[0] is not None else 1
+
+        # -------- Ensure a bin exists --------
+        cur.execute("SELECT BinId FROM Bin ORDER BY BinId LIMIT 1")
         rb = cur.fetchone()
         if rb:
             sample_bin = int(rb[0])
         else:
-            cur.execute("INSERT INTO Warehouse(Name) VALUES('Main WH')"); wh_id = cur.lastrowid
-            cur.execute("INSERT INTO Bin(WarehouseId, Aisle, Rack, Bin) VALUES(?,?,?,?)", (wh_id, "A","1","01"))
+            cur.execute("INSERT INTO Warehouse(Name) VALUES('Main WH')")
+            wh_id = cur.lastrowid
+            cur.execute(
+                "INSERT INTO Bin(WarehouseId, Aisle, Rack, Bin) VALUES(?,?,?,?)",
+                (wh_id, "A", "1", "01")
+            )
             sample_bin = cur.lastrowid
+
+        # -------- Masters --------
         sup = get_or_create_id(conn, "Supplier", "Name", "Demo Supplier", "SupplierId")
         mk  = get_or_create_id(conn, "Maker", "Name", "Demo Maker", "MakerId")
 
-        cur.execute("""
-            INSERT OR IGNORE INTO PaperReel(
-              SLNo, ReelNo, SupplierId, MakerId, ReceiveDate, SupplierInvDate,
-              DeckleCm, GSM, BF, Shade, OpeningKg, WeightKg, ReelLocationBinId,
-              DeliveryChallanNo, ReorderLevelKg, PaperRatePerKg, TransportRatePerKg,
-              BasicLandedCostPerKg, Remarks
-            ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-        """, ("S1","SAMPLE-PR-1", sup, mk, today_str(), today_str(),
-              180.0, 150, 22, "Natural", 0.0, 1100.0, sample_bin,
-              "DC-S1", 300.0, 45.0, 2.5, 47.5, "Sample row 1"))
-        cur.execute("SELECT ReelId FROM PaperReel WHERE ReelNo='SAMPLE-PR-1'"); rid1 = cur.fetchone()[0]
-        cur.execute("""
-            INSERT OR IGNORE INTO RM_Movement(ReelId, DateTime, Type, QtyKg, ToBinId, RefDocType, RefDocNo)
-            VALUES(?,?,?,?,?,?,?)
-        """, (rid1, datetime.now().isoformat(), "Receive", 1100.0, sample_bin, "SAMPLE","S1"))
+        # -------- Insert 2 sample reels --------
+        for i in range(2):
+            sl_no = str(next_sl + i)
+            reel_no = f"SAMPLE-PR-{next_sl + i}"
 
-        cur.execute("""
-            INSERT OR IGNORE INTO PaperReel(
-              SLNo, ReelNo, SupplierId, MakerId, ReceiveDate, SupplierInvDate,
-              DeckleCm, GSM, BF, Shade, OpeningKg, WeightKg, ReelLocationBinId,
-              DeliveryChallanNo, ReorderLevelKg, PaperRatePerKg, TransportRatePerKg,
-              BasicLandedCostPerKg, Remarks
-            ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-        """, ("S2","SAMPLE-PR-2", sup, mk, today_str(), today_str(),
-              160.0, 120, 18, "Brown", 0.0, 950.0, sample_bin,
-              "DC-S2", 250.0, 42.0, 2.0, 44.0, "Sample row 2"))
-        cur.execute("SELECT ReelId FROM PaperReel WHERE ReelNo='SAMPLE-PR-2'"); rid2 = cur.fetchone()[0]
-        cur.execute("""
-            INSERT OR IGNORE INTO RM_Movement(ReelId, DateTime, Type, QtyKg, ToBinId, RefDocType, RefDocNo)
-            VALUES(?,?,?,?,?,?,?)
-        """, (rid2, datetime.now().isoformat(), "Receive", 950.0, sample_bin, "SAMPLE","S2"))
+            cur.execute("""
+                INSERT INTO PaperReel(
+                    SLNo, ReelNo, SupplierId, MakerId, ReceiveDate, SupplierInvDate,
+                    DeckleCm, GSM, BF, Shade, OpeningKg, WeightKg, ReelLocationBinId,
+                    DeliveryChallanNo, ReorderLevelKg, PaperRatePerKg,
+                    TransportRatePerKg, BasicLandedCostPerKg, Remarks
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """, (
+                sl_no,
+                reel_no,
+                sup,
+                mk,
+                today_str(),
+                today_str(),
+                180.0,
+                150,
+                22,
+                "Natural",
+                0.0,
+                1000.0,
+                sample_bin,
+                f"DC-SAMPLE-{sl_no}",
+                300.0,
+                45.0,
+                2.5,
+                47.5,
+                "Auto-generated sample reel"
+            ))
+
+            # Movement entry
+            cur.execute("SELECT ReelId FROM PaperReel WHERE ReelNo=?", (reel_no,))
+            rid = cur.fetchone()[0]
+
+            cur.execute("""
+                INSERT INTO RM_Movement(
+                    ReelId, DateTime, Type, QtyKg, ToBinId, RefDocType, RefDocNo
+                ) VALUES(?,?,?,?,?,?,?)
+            """, (
+                rid,
+                datetime.now().isoformat(),
+                "Receive",
+                1000.0,
+                sample_bin,
+                "SAMPLE",
+                sl_no
+            ))
 
 # =========================
 # Edit/Delete helpers (Simple & Stable)
