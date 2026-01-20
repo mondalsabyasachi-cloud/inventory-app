@@ -178,6 +178,21 @@ def init_db():
               Name TEXT UNIQUE NOT NULL
             )
         """)
+        # -----------------------------------
+        # Paper Reel Movement Ledger (PHASE-1)
+        # -----------------------------------
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS PaperReelMovement(
+            MovementId INTEGER PRIMARY KEY AUTOINCREMENT,
+            ReelId INTEGER NOT NULL,
+            EventType TEXT NOT NULL,     -- RECEIVE / CONSUME / RETURN / ADJUST
+            QtyKg REAL NOT NULL,
+            EventDate TEXT NOT NULL,
+            RefDoc TEXT,
+            CreatedBy TEXT,
+            CreatedAt TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+        """)
 
         # Raw Material: Paper Reels
         cur.execute("""
