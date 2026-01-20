@@ -1270,8 +1270,28 @@ def rm_issue_form():
     if st.button("Post Issue", type="primary"):
         with get_conn() as conn:
             cur = conn.cursor()
-            cur.execute("INSERT INTO RM_Movement(ReelId, DateTime, Type, QtyKg) VALUES(?,?,?,?)",
-                        (rmap[chosen], datetime.now().isoformat(), "Issue", qty))
+            # -----------------------------------
+            # PHASE-1: CONSUMPTION → AUDIT LEDGER
+            # -----------------------------------
+            cur.execute("""
+            INSERT INTO PaperReelMovement(
+                ReelId,
+                EventType,
+                QtyKg,
+                EventDate,
+                RefDoc,
+                CreatedBy
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            """, (
+                rmap[chosen],                       # ReelId
+                "CONSUME",
+                qty,                                # Consumed Qty
+                consume_dt.strftime("%Y-%m-%d"),
+                "MANUAL_ISSUE",                     # placeholder ref
+                "Planning"
+            ))
+
             cur.execute("UPDATE PaperReel SET LastConsumeDate=?, ConsumptionEntryDate=? WHERE ReelId=?",
                         (consume_dt.isoformat(), datetime.now().isoformat(), rmap[chosen]))
         st.success(f"Issued {qty} Kg from **{chosen}**.")
