@@ -711,7 +711,18 @@ def insert_two_sample_reels():
         """)
         r = cur.fetchone()
         next_sl = int(r[0]) + 1 if r and r[0] is not None else 1
-
+                # -------- Determine next SAMPLE ReelNo (monotonic, never reused) --------
+        cur.execute("""
+            SELECT MAX(
+                CAST(SUBSTR(ReelNo, LENGTH('SAMPLE-PR-') + 1) AS INTEGER)
+            )
+            FROM PaperReel
+            WHERE ReelNo LIKE 'SAMPLE-PR-%'
+        """)
+        r = cur.fetchone()
+        next_sample_no = int(r[0]) + 1 if r and r[0] is not None else 1
+     
+        
         # -------- Ensure a bin exists --------
         cur.execute("SELECT BinId FROM Bin ORDER BY BinId LIMIT 1")
         rb = cur.fetchone()
@@ -733,7 +744,7 @@ def insert_two_sample_reels():
         # -------- Insert 2 sample reels --------
         for i in range(2):
             sl_no = str(next_sl + i)
-            reel_no = f"SAMPLE-PR-{next_sl + i}"
+            reel_no = f"SAMPLE-PR-{next_sample_no + i}"
 
             cur.execute("""
                 INSERT INTO PaperReel(
