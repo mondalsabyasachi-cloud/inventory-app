@@ -1280,27 +1280,7 @@ def show_raw_materials():
             unsafe_allow_html=True
         )
 
-    with h2:
-        st.markdown(
-            f"""
-            <div class="erp-kpi">
-                <div class="erp-kpi-label">Total Stock (Kg)</div>
-                <div class="erp-kpi-value">{total_stock_kg:,.2f}</div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-    with h3:
-        st.markdown(
-            f"""
-            <div class="erp-kpi">
-                <div class="erp-kpi-label">Total Stock Value (₹)</div>
-                <div class="erp-kpi-value">₹ {total_stock_value:,.2f}</div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+    
 
     # -------------------------------------------------
     # Filters (Reel No, BF, GSM, Deckle)
