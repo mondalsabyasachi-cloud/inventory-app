@@ -1266,7 +1266,7 @@ def rm_issue_form():
     rmap = {row["ReelNo"]: int(row["ReelId"]) for _, row in reels.iterrows()}
     chosen = st.selectbox("Select Reel", options=list(rmap.keys()))
     qty = st.number_input("Issue Qty (Kg)", min_value=1.0, value=100.0, step=1.0)
-    consume_dt = st.date_input("Consume Dt", value=date.today())
+    
     if st.button("Post Issue", type="primary"):
         with get_conn() as conn:
             cur = conn.cursor()
