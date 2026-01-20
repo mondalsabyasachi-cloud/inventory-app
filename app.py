@@ -1284,16 +1284,15 @@ def rm_issue_form():
             )
             VALUES (?, ?, ?, ?, ?, ?)
             """, (
-                rmap[chosen],                       # ReelId
-                "CONSUME",
-                qty,                                # Consumed Qty
-                consume_dt.strftime("%Y-%m-%d"),
-                "MANUAL_ISSUE",                     # placeholder ref
-                "Planning"
+                rmap[chosen],                     # ReelId
+                "ISSUE",                          # EventType
+                qty,                              # Qty issued (NOT consumed)
+                date.today().strftime("%Y-%m-%d"),# Issue date (known today)
+                "OUTSOURCE",                      # Reason / RefDoc
+                "Stores"                          # Who entered
             ))
 
-            cur.execute("UPDATE PaperReel SET LastConsumeDate=?, ConsumptionEntryDate=? WHERE ReelId=?",
-                        (consume_dt.isoformat(), datetime.now().isoformat(), rmap[chosen]))
+            
         st.success(f"Issued {qty} Kg from **{chosen}**.")
 
 def rm_transfer_adjust_form():
