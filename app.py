@@ -296,19 +296,29 @@ init_db()
 # SL No resequencing (Paper Reel)
 # -------------------------
 def resequence_slno(conn):
+    """
+    Reassigns SLNo as clean numeric sequence (1,2,3...)
+    ordered by ReceiveDate then ReelNo.
+    """
     cur = conn.cursor()
-    cur.execute("""
-        SELECT ReelId
-        FROM PaperReel
-        ORDER BY ReceiveDate, ReelId
-    """)
-    rows = cur.fetchall()
 
-    for idx, r in enumerate(rows, start=1):
-        cur.execute(
-            "UPDATE PaperReel SET SLNo=? WHERE ReelId=?",
-            (idx, r[0])
+    cur.execute("""
+        WITH ordered AS (
+            SELECT ReelId,
+                   ROW_NUMBER() OVER (
+                       ORDER BY
+                           date(ReceiveDate) ASC,
+                           ReelNo ASC
+                   ) AS new_sl
+            FROM PaperReel
         )
+        UPDATE PaperReel
+        SET SLNo = (
+            SELECT new_sl
+            FROM ordered
+            WHERE ordered.ReelId = PaperReel.ReelId
+        )
+    """)
 
 # -------------------------
 # Utilities
