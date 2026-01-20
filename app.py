@@ -1229,6 +1229,28 @@ def rm_receive_form():
                   dc_no, reorder, paper_rate, transport_rate, landed, remarks))
             cur.execute("SELECT ReelId FROM PaperReel WHERE ReelNo=?", (reelno,))
             new_id = cur.fetchone()[0]
+            # -------------------------------------------------
+            # PHASE-1: RECEIVE → PaperReelMovement (AUDIT LEDGER)
+            # -------------------------------------------------
+            cur.execute("""
+            INSERT INTO PaperReelMovement(
+                ReelId,
+                EventType,
+                QtyKg,
+                EventDate,
+                RefDoc,
+                CreatedBy
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            """, (
+                new_id,
+                "RECEIVE",
+                weight,                     # Reel Original Weight(Kg)
+                rcv_dt.strftime("%Y-%m-%d"),
+                dc_no,
+                "Stores"
+            ))
+
             cur.execute("""
                 INSERT INTO RM_Movement(ReelId, DateTime, Type, QtyKg, ToBinId, RefDocType, RefDocNo)
                 VALUES(?,?,?,?,?,?,?)
