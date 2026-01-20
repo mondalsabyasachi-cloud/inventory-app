@@ -895,24 +895,53 @@ def save_paper_edits(orig_df: pd.DataFrame, edited_df: pd.DataFrame) -> int:
     return changed_rows
 
 def delete_paper_rows_by_reel_nos(reel_nos) -> int:
-    """Delete rows by Reel No (also cleans RM_Movement)."""
+    """Delete rows by Reel No and resequence SLNo."""
     if not reel_nos:
         return 0
-    deleted = 0
+
     with get_conn() as conn:
         cur = conn.cursor()
+
         for rn in reel_nos:
             cur.execute("SELECT ReelId FROM PaperReel WHERE ReelNo=?", (rn,))
             r = cur.fetchone()
             if not r:
                 continue
             rid = int(r[0])
+
             cur.execute("DELETE FROM RM_Movement WHERE ReelId=?", (rid,))
-            cur.execute("DELETE FROM PaperReel   WHERE ReelId=?", (rid,))
-            deleted += 1
-            
-    resequence_slno(conn)
-    return deleted
+            cur.execute("DELETE FROM PaperReel WHERE ReelId=?", (rid,))
+
+        # ✅ MUST happen after all deletes, inside same connection
+        resequence_slno(conn)
+
+        return len(reel_nos)
+
+
+
+def resequence_slno(conn):
+    """
+    Reassigns SLNo as continuous numeric values (1,2,3...)
+    ordered by ReceiveDate, ReelNo.
+    """
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT ReelId
+        FROM PaperReel
+        ORDER BY
+            date(ReceiveDate) ASC,
+            ReelNo ASC
+    """)
+    rows = cur.fetchall()
+
+    for idx, (reel_id,) in enumerate(rows, start=1):
+        cur.execute(
+            "UPDATE PaperReel SET SLNo=? WHERE ReelId=?",
+            (str(idx), reel_id)
+        )
+
+
 
 # -------------------------
 # Demo Data seeding
