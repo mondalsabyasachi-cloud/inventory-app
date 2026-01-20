@@ -1257,7 +1257,7 @@ def show_raw_materials():
     # ERP KPI ROW (Total Reel Weight & Cost)
     # -------------------------------------------------
   
-with h2:
+    with h2:
         st.markdown(
             f"""
             <div class="erp-kpi">
