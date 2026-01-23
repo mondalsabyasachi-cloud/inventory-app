@@ -1745,7 +1745,17 @@ def show_fg():
         <div class="metric-card" style="border-left:6px solid {ACCENT_FG}">
             <div class="metric-title">Available to Promise</div>
             <div class="metric-value">{total:,} Nos</div>
-            <div class="metric-sub">for {cust} • {sku}</div>
+            st.markdown(
+                f"""
+                <div class="metric-card">
+                    <div class="metric-title">Finished Goods</div>
+                    <div class="metric-value">{fg_qty}</div>
+                    <div class="metric-sub">for {cust} • {sku}</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
         </div>
         """, unsafe_allow_html=True)
         st.dataframe(df, use_container_width=True, hide_index=True)
