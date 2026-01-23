@@ -3,7 +3,7 @@
 # Packsmart Inventory App (RM / WIP / FG) - Streamlit (single file)
 # Prepared for: Saby Mondal | Packsmart India Pvt Ltd
 # --------------------------------------------------------------
-
+from core.paper_reel_repo import list_paper_reels
 from core.db import get_conn as shared_get_conn
 from io import BytesIO
 import os
@@ -1108,68 +1108,12 @@ def show_dashboard():
 # Raw Materials (Paper Reels and others)
 # -------------------------
 def fetch_reel_grid() -> pd.DataFrame:
+    """
+    Phase-2: Read-side authority moved to repository.
+    UI structure and columns remain unchanged.
+    """
     with get_conn() as conn:
-        df = pd.read_sql_query("""
-           SELECT
-             pr.ReelId,
-             pr.SLNo AS "SL No.",
-             pr.ReelNo AS "Reel No",
-             COALESCE(s.Name,'') AS "Reel Supplier",
-             COALESCE(m.Name,'') AS "Reel Maker",
-             pr.ReceiveDate AS "Material Rcv Dt.",
-             pr.SupplierInvDate AS "Maker's/Supplier's Inv Dt.",
-             pr.DeckleCm AS "Deckle in cm",
-             ROUND(pr.DeckleCm / 2.54, 3) AS "Deckle in Inch",
-             pr.GSM, pr.BF,
-             pr.Shade AS "Paper Shade",
-             pr.OpeningKg AS "Opening Stk Till Date",
-             pr.WeightKg AS "Weight (Kg)",
-             COALESCE((SELECT SUM(CASE WHEN Type IN ('Issue','Scrap') THEN QtyKg ELSE 0 END)
-                       FROM RM_Movement WHERE ReelId = pr.ReelId),0) AS "Consumed Wt",
-             pr.LastConsumeDate AS "Consume Dt",
-             pr.ConsumptionEntryDate AS "Consumption Entry Date",
-             '' AS "Closing Stock till date",
-             COALESCE(w.Name || '/' || b.Aisle || '-' || b.Rack || '-' || b.Bin, '') AS "Reel Location",
-             COALESCE(sku.SKUCode,'') AS "Target SKU",
-             COALESCE(cu.Name,'') AS "Target Customer",
-             pr.ReelShiftDate AS "Reel Shifting Date",
-             pr.DeliveryChallanNo AS "Delivery Challan No.",
-             pr.ReorderLevelKg AS "Reorder Level",
-             pr.PaperRatePerKg AS "Paper Rate/Kg",
-             pr.TransportRatePerKg AS "Transport Rate/Kg",
-             pr.BasicLandedCostPerKg AS "Basic Landed Cost/Kg",
-             '' AS "Current Stock Value(INR)",
-             CAST((julianday('now') - julianday(pr.ReceiveDate)) AS INT) AS "Reel Holding Time (Days)",
-             pr.Remarks AS "Remarks"
-           FROM PaperReel pr
-           LEFT JOIN Supplier s ON pr.SupplierId = s.SupplierId
-           LEFT JOIN Maker m ON pr.MakerId = m.MakerId
-           LEFT JOIN Bin b ON pr.ReelLocationBinId = b.BinId
-           LEFT JOIN Warehouse w ON b.WarehouseId = w.WarehouseId
-           LEFT JOIN SKU sku ON pr.TargetSKUId = sku.SKUId
-           LEFT JOIN Customer cu ON pr.TargetCustomerId = cu.CustomerId
-           ORDER BY pr.ReceiveDate DESC, pr.ReelNo
-        """, conn)
-
-        closings, values = [], []
-        for _, row in df.iterrows():
-            _, closing = compute_reel_closing(conn, int(row["ReelId"]))
-            closings.append(closing)
-            cost = pd.read_sql_query("""
-                 SELECT PaperRatePerKg, TransportRatePerKg, BasicLandedCostPerKg
-                 FROM PaperReel WHERE ReelId=?
-            """, conn, params=[int(row["ReelId"])]).iloc[0]
-            perkg = float(cost["BasicLandedCostPerKg"] or 0.0)
-            if perkg <= 0:
-                perkg = float(cost["PaperRatePerKg"] or 0.0) + float(cost["TransportRatePerKg"] or 0.0)
-            values.append(round(closing * perkg, 2))
-
-        if len(df) > 0:
-            df.loc[:, "Closing Stock till date"] = closings
-            df.loc[:, "Current Stock Value(INR)"] = values
-
-        return df.drop(columns=["ReelId"])
-
+        return list_paper_reels(conn)
 def rm_receive_form():
     st.subheader("📥 Receive Paper Reel")
     with get_conn() as conn:
