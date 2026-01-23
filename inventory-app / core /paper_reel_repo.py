@@ -19,15 +19,19 @@ def insert_paper_reel(conn, data: dict):
     - Excel upload
     """
 
-    opening_kg = data.get("opening_kg") or data.get("original_weight") or 0
-    consumed_kg = data.get("consumed_kg") or 0
+    opening_kg = data.get("original_weight")
+
+    if opening_kg is None or opening_kg <= 0:
+        raise ValueError("Original Reel Weight must be greater than zero")
+
+    consumed_kg = 0  # consumption will be recorded via RM_Movement only
 
     deckle_inch = calc_deckle_inch(data.get("deckle_cm"))
     landed_cost = calc_landed_cost(
         data.get("paper_rate", 0),
         data.get("transport_rate", 0)
     )
-    closing_kg = calc_closing_stock(opening_kg, consumed_kg)
+    closing_kg = opening_kg
     stock_value = calc_stock_value(closing_kg, landed_cost)
 
     cur = conn.cursor()
