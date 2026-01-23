@@ -1,3 +1,4 @@
+import sqlite3
 # --------------------------------------------------
 # Paper Reel Repository – DB Write Logic
 # --------------------------------------------------
@@ -112,3 +113,58 @@ def insert_paper_reel(conn, data: dict):
     ))
 
     resequence_paper_reels(conn)
+        # --- Phase-1 Ledger Consistency Assertion (composite business key) ---
+    ledger_closing = calc_closing_stock(
+        conn,
+        reel_no=data.get("reel_no"),
+        supplier=data.get("supplier")
+    )
+
+    if round(ledger_closing, 2) != round(closing_kg, 2):
+        raise RuntimeError(
+            f"Ledger mismatch after insert for "
+            f"ReelNo={data.get('reel_no')} Supplier={data.get('supplier')}: "
+            f"table={closing_kg}, ledger={ledger_closing}"
+        )
+
+def list_paper_reels(conn):
+    """
+    Phase-2 Read Authority (READ-ONLY)
+
+    Single source of truth for:
+    - UI tables
+    - Reports
+    - Excel exports
+    """
+
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT
+            sl_no,
+            reel_no,
+            supplier,
+            maker,
+            gsm,
+            bf,
+            paper_shade,
+            original_weight,
+            consumed_wt,
+            closing_stock,
+            reel_location,
+            reorder_level,
+            paper_rate,
+            transport_rate,
+            landed_cost,
+            current_stock_value,
+            holding_days,
+            material_rcv_date,
+            supplier_invoice_date,
+            delivery_challan,
+            remarks
+        FROM paper_reels
+        ORDER BY material_rcv_date DESC, sl_no DESC
+    """)
+
+    return cur.fetchall()
