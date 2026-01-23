@@ -19,6 +19,9 @@ def insert_paper_reel(conn, data: dict):
     - Excel upload
     """
 
+    # Phase-1 rule:
+    # At RECEIVE time, opening stock = original reel weight
+    # No consumption is applied here
     opening_kg = data.get("original_weight")
 
     if opening_kg is None or opening_kg <= 0:
