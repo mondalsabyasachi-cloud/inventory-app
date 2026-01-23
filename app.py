@@ -1093,33 +1093,29 @@ def show_dashboard():
     )
 
     with col2:
-        st.markdown(f"""
-        <div class="metric-card" style="border-left:6px solid {ACCENT_WIP}">
-            <div class="metric-title">WIP Items</div>
-            <div class="metric-value">{int(wip_qty):,} Nos</div>
-            <div class="metric-sub">in {int(wip_units)} units</div>
-        </div>""", unsafe_allow_html=True)
+        st.markdown(
+            f"""
+            <div class="metric-card" style="border-left:6px solid {ACCENT_WIP}">
+                <div class="metric-title">WIP Items</div>
+                <div class="metric-value">{int(wip_qty):,} Nos</div>
+                <div class="metric-sub">in {int(wip_units)} units</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
     with col3:
-        st.markdown(f"""
-        <div class="metric-card" style="border-left:6px solid {ACCENT_FG}">
-            <div class="metric-title">Finished Goods</div>
-            <div class="metric-value">{fg_atp:,} Nos</div>
-            st.markdown(
-                f'<div class="metric-sub">available to promise • {fg_pallets} pallets</div>',
-                unsafe_allow_html=True
-            )
+        st.markdown(
+            f"""
+            <div class="metric-card" style="border-left:6px solid {ACCENT_FG}">
+                <div class="metric-title">Finished Goods</div>
+                <div class="metric-value">{fg_atp:,} Nos</div>
+                <div class="metric-sub">available to promise - {fg_pallets} pallets</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
-        </div>""", unsafe_allow_html=True)
-
-    st.markdown("---")
-    c1, c2 = st.columns(2, gap="large")
-    with c1:
-        st.subheader("➕ Add Inventory")
-        st.caption("Use **Raw Materials** or **Finished Goods** pages for detailed operations.")
-        if st.button("Go to Raw Materials", use_container_width=True, type="primary"):
-            st.session_state["_pending_nav"] = "Raw Materials"; st.rerun()
-    with c2:
-        st.subheader("🔎 View Inventory")
+    st.markdown("---")er("🔎 View Inventory")
         st.caption("Filter and drill down in each module (RM / WIP / FG).")
         if st.button("Go to Finished Goods", use_container_width=True):
             st.session_state["_pending_nav"] = "Finished Goods"; st.rerun()
