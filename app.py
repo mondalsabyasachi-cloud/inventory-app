@@ -1074,7 +1074,18 @@ def show_dashboard():
         f"""
         <div class="metric-card" style="border-left:6px solid {ACCENT_RM}">
             <div class="metric-title">Raw Materials</div>
-            <div class="metric-value">{total_rm_kg:,.2f} Kg</div>
+            with col1:
+                st.markdown(
+                    f"""
+                    <div class="metric-card" style="border-left:6px solid {ACCENT_RM}">
+                        <div class="metric-title">Raw Materials</div>
+                        <div class="metric-value">{total_rm_kg:,.2f} Kg</div>
+                        <div class="metric-sub">in {total_reels} reels</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
             <div class="metric-sub">in {total_reels} reels</div>
         </div>
         """,
