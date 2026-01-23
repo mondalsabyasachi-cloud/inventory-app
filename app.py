@@ -1070,16 +1070,17 @@ def show_dashboard():
         """, conn).iloc[0]
         fg_atp, fg_pallets = int(fg["ATP"]), int(fg["Pallets"])
     with col1:
-        st.markdown(f"""
+    st.markdown(
+        f"""
         <div class="metric-card" style="border-left:6px solid {ACCENT_RM}">
             <div class="metric-title">Raw Materials</div>
-            st.markdown(
-                f'<div class="metric-value">{total_rm_kg:,.2f} Kg</div>',
-                unsafe_allow_html=True
-            )
-
+            <div class="metric-value">{total_rm_kg:,.2f} Kg</div>
             <div class="metric-sub">in {total_reels} reels</div>
-        </div>""", unsafe_allow_html=True)
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
     with col2:
         st.markdown(f"""
         <div class="metric-card" style="border-left:6px solid {ACCENT_WIP}">
