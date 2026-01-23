@@ -1354,7 +1354,11 @@ def show_raw_materials():
             f"""
             <div class="erp-kpi">
                 <div class="erp-kpi-label">Total Stock (Kg)</div>
-                <div class="erp-kpi-value">{total_stock_kg:,.2f}</div>
+                st.markdown(
+                    f'<div class="erp-kpi-value">{total_stock_kg:,.2f}</div>',
+                    unsafe_allow_html=True
+                )
+
             </div>
             """,
             unsafe_allow_html=True
