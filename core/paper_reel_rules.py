@@ -130,6 +130,24 @@ def calc_closing_stock(opening: float, consumed: float) -> float:
 def calc_stock_value(closing_kg: float, landed_cost: float) -> float:
     return round((closing_kg or 0) * (landed_cost or 0), 2)
 
+def calc_opening_and_closing(original_weight: float, movement_qty_list: list[float]):
+    """
+    Opening Stock and Closing Stock calculation.
+    Opening = Original Reel Weight
+    Closing = Opening - SUM(all issued / consumed quantities)
+    """
+
+    opening = round(original_weight or 0, 2)
+
+    total_issued = sum(movement_qty_list) if movement_qty_list else 0
+    closing = round(opening - total_issued, 2)
+
+    # Safety guard: closing stock should never go negative
+    if closing < 0:
+        closing = 0
+
+    return opening, closing
+
 # ==================================================
 # FUTURE PLACEHOLDER – VENDOR SKU MAPPING TABLE
 # ==================================================
