@@ -1092,7 +1092,11 @@ def show_dashboard():
         <div class="metric-card" style="border-left:6px solid {ACCENT_FG}">
             <div class="metric-title">Finished Goods</div>
             <div class="metric-value">{fg_atp:,} Nos</div>
-            <div class="metric-sub">available to promise • {fg_pallets} pallets</div>
+            st.markdown(
+                f'<div class="metric-sub">available to promise • {fg_pallets} pallets</div>',
+                unsafe_allow_html=True
+            )
+
         </div>""", unsafe_allow_html=True)
 
     st.markdown("---")
