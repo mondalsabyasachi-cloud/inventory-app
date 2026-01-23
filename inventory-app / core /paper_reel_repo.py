@@ -22,12 +22,20 @@ def insert_paper_reel(conn, data: dict):
     # Phase-1 rule:
     # At RECEIVE time, opening stock = original reel weight
     # No consumption is applied here
-    opening_kg = data.get("original_weight")
+    original_weight = data.get("original_weight")
 
-    if opening_kg is None or opening_kg <= 0:
+    if original_weight is None or original_weight <= 0:
         raise ValueError("Original Reel Weight must be greater than zero")
-
-    consumed_kg = 0  # consumption will be recorded via RM_Movement only
+    
+    # movement_qty_list contains historical consumption quantities (if any)
+    movement_qty_list = data.get("movement_qty_list") or []
+    
+    opening_kg, closing_kg = calc_opening_and_closing(
+        original_weight,
+        movement_qty_list
+    )
+    
+    consumed_kg = sum(movement_qty_list) if movement_qty_list else 0
 
     deckle_inch = calc_deckle_inch(data.get("deckle_cm"))
     landed_cost = calc_landed_cost(
