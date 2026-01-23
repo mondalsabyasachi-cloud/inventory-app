@@ -1385,7 +1385,16 @@ def show_raw_materials():
                     unsafe_allow_html=True
                 )
 
-                <div class="erp-kpi-value">₹ {total_stock_value:,.2f}</div>
+                st.markdown(
+                    f"""
+                    <div class="erp-kpi-card">
+                        <div class="erp-kpi-label">Total Stock Value (₹)</div>
+                        <div class="erp-kpi-value">₹ {total_stock_value:,.2f}</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
             </div>
             """,
             unsafe_allow_html=True
