@@ -762,33 +762,30 @@ def insert_two_sample_reels():
             reel_no = f"SAMPLE-PR-{next_sample_no + i}"
 
             cur.execute("""
-                INSERT INTO PaperReel(
-                    SLNo, ReelNo, SupplierId, MakerId, ReceiveDate, SupplierInvDate,
-                    DeckleCm, GSM, BF, Shade, OpeningKg, WeightKg, ReelLocationBinId,
-                    DeliveryChallanNo, ReorderLevelKg, PaperRatePerKg,
-                    TransportRatePerKg, BasicLandedCostPerKg, Remarks
-                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-            """, (
-                sl_no,
-                reel_no,
-                sup,
-                mk,
-                today_str(),
-                today_str(),
-                180.0,
-                150,
-                22,
-                "Natural",
-                0.0,
-                1000.0,
-                sample_bin,
-                f"DC-SAMPLE-{sl_no}",
-                300.0,
-                45.0,
-                2.5,
-                47.5,
-                "Auto-generated sample reel"
-            ))
+                from core.paper_reel_repo import insert_paper_reel
+
+            insert_paper_reel(conn, {
+                "sl_no": sl_no,
+                "reel_no": reel_no,
+                "supplier_id": sup,
+                "maker_id": mk,
+                "receive_date": today_str(),
+                "supplier_inv_date": today_str(),
+                "deckle_cm": 180.0,
+                "gsm": 150,
+                "bf": 22,
+                "shade": "Natural",
+                "opening_kg": 0.0,
+                "received_kg": 1000.0,
+                "bin_id": sample_bin,
+                "delivery_challan_no": f"DC-SAMPLE-{sl_no}",
+                "reorder_level_kg": 300.0,
+                "paper_rate_per_kg": 45.0,
+                "transport_rate_per_kg": 2.5,
+                "basic_landed_cost_per_kg": 47.5,
+                "remarks": "Auto-generated sample reel"
+            })
+
 
             # Movement entry
             cur.execute("SELECT ReelId FROM PaperReel WHERE ReelNo=?", (reel_no,))
